@@ -1,39 +1,12 @@
-import { app, shell, BrowserWindow, ipcMain } from 'electron'
-import { join } from 'path'
+import { app, BrowserWindow, ipcMain } from 'electron'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
-import icon from '../../resources/icon.png?asset'
+import { SocketService } from './services/SocketService'
+import { createMainWindow } from './windows/createMainWindow'
+import { SERVER_URL } from '../shared/config'
+import type { Chat } from '../shared/chat'
+import type { WSEnvelope } from '../shared/ws'
 
-function createWindow(): void {
-  // Create the browser window.
-  const mainWindow = new BrowserWindow({
-    width: 900,
-    height: 670,
-    show: false,
-    autoHideMenuBar: true,
-    ...(process.platform === 'linux' ? { icon } : {}),
-    webPreferences: {
-      preload: join(__dirname, '../preload/index.js'),
-      sandbox: false
-    }
-  })
-
-  mainWindow.on('ready-to-show', () => {
-    mainWindow.show()
-  })
-
-  mainWindow.webContents.setWindowOpenHandler((details) => {
-    shell.openExternal(details.url)
-    return { action: 'deny' }
-  })
-
-  // HMR for renderer base on electron-vite cli.
-  // Load the remote URL for development or the local html file for production.
-  if (is.dev && process.env['ELECTRON_RENDERER_URL']) {
-    mainWindow.loadURL(process.env['ELECTRON_RENDERER_URL'])
-  } else {
-    mainWindow.loadFile(join(__dirname, '../renderer/index.html'))
-  }
-}
+const socketService = new SocketService((attempt) => Math.min(1_000 * 2 ** (attempt - 1), 10_000))
 
 // This method will be called when Electron has finished
 // initialization and is ready to create browser windows.
@@ -52,12 +25,37 @@ app.whenReady().then(() => {
   // IPC test
   ipcMain.on('ping', () => console.log('pong'))
 
-  createWindow()
+  ipcMain.on('renderer:send-chat', (_event, chat: Chat) => {
+    console.log('Sending chat to server:', chat)
+    const formattedEvent: WSEnvelope = {
+      type: 'chat',
+      data: chat
+    }
+    socketService.send(formattedEvent)
+    console.log('[renderer] Sent chat:', chat.id)
+  })
+
+  socketService.onMessage((message) => {
+    console.log(`[socket] event -> ${message.type}`, message)
+  })
+
+  socketService.onStateChange((state) => {
+    if (is.dev) {
+      console.log(`[socket] state -> ${state}`)
+    }
+  })
+
+  socketService.onError((error) => {
+    console.error('[socket] error', error)
+  })
+
+  socketService.connect(SERVER_URL + '/ws')
+  createMainWindow()
 
   app.on('activate', function () {
     // On macOS it's common to re-create a window in the app when the
     // dock icon is clicked and there are no other windows open.
-    if (BrowserWindow.getAllWindows().length === 0) createWindow()
+    if (BrowserWindow.getAllWindows().length === 0) createMainWindow()
   })
 })
 
@@ -68,6 +66,10 @@ app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {
     app.quit()
   }
+})
+
+app.on('before-quit', () => {
+  socketService.destroy()
 })
 
 // In this file you can include the rest of your app's specific main process

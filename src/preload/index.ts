@@ -1,8 +1,11 @@
-import { contextBridge } from 'electron'
+import { contextBridge, ipcRenderer } from 'electron'
 import { electronAPI } from '@electron-toolkit/preload'
+import type { Chat } from '../shared/chat'
 
 // Custom APIs for renderer
-const api = {}
+const api = {
+  sendChat: (chat: Chat) => ipcRenderer.send('renderer:send-chat', chat)
+}
 
 // Use `contextBridge` APIs to expose Electron APIs to
 // renderer only if context isolation is enabled, otherwise
