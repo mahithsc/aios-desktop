@@ -1,4 +1,5 @@
-import type { JSX, ReactNode } from 'react'
+import { useState, type JSX, type KeyboardEvent, type ReactNode } from 'react'
+import { useChatStore } from '../../store/useChatSessionStore'
 
 const tasks = [
   { id: 'task-1', title: 'Get the home shell feeling calm' },
@@ -34,6 +35,32 @@ const Section = ({ title, children }: SectionProps): JSX.Element => {
 }
 
 const Home = (): JSX.Element => {
+  const [value, setValue] = useState('')
+  const addUserMessage = useChatStore((state) => state.addUserMessage)
+  const createAssistantMessageStub = useChatStore((state) => state.createAssistantMessageStub)
+
+  const handleSubmit = (): void => {
+    const nextValue = value.trim()
+
+    if (!nextValue) {
+      return
+    }
+
+    addUserMessage(nextValue)
+    window.api.sendChat(useChatStore.getState().chat)
+    createAssistantMessageStub()
+    setValue('')
+  }
+
+  const handleKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>): void => {
+    if (event.key !== 'Enter' || event.shiftKey || event.nativeEvent.isComposing) {
+      return
+    }
+
+    event.preventDefault()
+    handleSubmit()
+  }
+
   return (
     <div className="mx-auto flex max-w-5xl flex-col gap-10 pb-8">
       <section className="flex flex-col items-center">
@@ -45,6 +72,9 @@ const Home = (): JSX.Element => {
             <textarea
               rows={2}
               placeholder="Ask anything..."
+              value={value}
+              onChange={(event) => setValue(event.target.value)}
+              onKeyDown={handleKeyDown}
               className="min-h-12 w-full resize-none bg-transparent pt-0.5 text-sm text-stone-700 outline-none placeholder:text-stone-400"
             />
           </div>
@@ -62,6 +92,7 @@ const Home = (): JSX.Element => {
             <div className="flex items-center">
               <button
                 type="button"
+                onClick={handleSubmit}
                 className="flex h-8 w-8 items-center justify-center rounded-full bg-stone-900 text-white"
                 aria-label="Send message"
               >

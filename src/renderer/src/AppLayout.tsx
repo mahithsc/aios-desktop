@@ -2,6 +2,7 @@ import type { JSX } from 'react'
 import { useMemo, useState } from 'react'
 import Agents from './pages/agents/Agents'
 import Home from './pages/home/Home'
+import { useChatStore } from './store/useChatSessionStore'
 
 type TabId = 'home' | 'agents'
 
@@ -12,6 +13,7 @@ const tabs: Array<{ id: TabId; label: string }> = [
 
 const AppLayout = (): JSX.Element => {
   const [activeTab, setActiveTab] = useState<TabId>('home')
+  const newChat = useChatStore((state) => state.newChat)
 
   const content = useMemo(() => {
     if (activeTab === 'agents') {
@@ -24,17 +26,24 @@ const AppLayout = (): JSX.Element => {
   return (
     <main className="min-h-screen bg-white px-6 py-5 text-stone-950 sm:px-8 sm:py-6">
       <div className="mx-auto flex min-h-screen w-full max-w-6xl flex-col">
-        <header className="flex items-center justify-between">
+        <header className="grid grid-cols-[1fr_auto_1fr] items-center">
           <div className="flex items-center gap-3">
             <div className="flex h-9 w-9 items-center justify-center rounded-full border border-stone-200 bg-white text-xs">
               III
             </div>
-            <div className="rounded-full border border-stone-200 bg-white px-4 py-2 text-sm">
-              GPT 5.4
-            </div>
+            <button
+              type="button"
+              onClick={() => newChat()}
+              className="rounded-full border border-stone-200 bg-white px-4 py-2 text-sm text-stone-700 transition hover:bg-stone-50"
+            >
+              <span className="inline-flex items-center gap-1.5">
+                <span>+</span>
+                <span>New Chat</span>
+              </span>
+            </button>
           </div>
 
-          <nav className="flex items-center gap-1 rounded-full border border-stone-200 bg-white p-1">
+          <nav className="justify-self-center flex items-center gap-1 rounded-full border border-stone-200 bg-white p-1">
             {tabs.map((tab) => {
               const isActive = tab.id === activeTab
 
@@ -53,7 +62,9 @@ const AppLayout = (): JSX.Element => {
             })}
           </nav>
 
-          <div className="w-[76px]" aria-hidden="true" />
+          <div className="justify-self-end rounded-full border border-stone-200 bg-white px-4 py-2 text-sm">
+            GPT 5.4
+          </div>
         </header>
 
         <div className="flex-1 pt-10 sm:pt-12">{content}</div>
