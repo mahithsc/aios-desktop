@@ -37,6 +37,9 @@ app.whenReady().then(() => {
 
   socketService.onMessage((message) => {
     console.log(`[socket] event -> ${message.type}`, message)
+    for (const window of BrowserWindow.getAllWindows()) {
+      window.webContents.send('main:socket-event', message)
+    }
   })
 
   socketService.onStateChange((state) => {

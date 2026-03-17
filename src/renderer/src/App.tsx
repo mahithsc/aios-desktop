@@ -1,42 +1,33 @@
-import type { JSX, KeyboardEventHandler } from 'react'
-import Input from './components/Input'
-import { useInputStore } from './store/useInputStore'
+import { useEffect, type JSX } from 'react'
+import ChatInput from './components/ChatInput'
 import { useChatStore } from './store/useChatSessionStore'
+import Messages from './components/Message'
+import Home from './pages/home/Home'
 
 const App = (): JSX.Element => {
-  const value = useInputStore((state) => state.value)
-  const setValue = useInputStore((state) => state.setValue)
-  const newChat = useChatStore((state) => state.newChat)
-  const chat = useChatStore((state) => state.chat)
-  const addUserMessage = useChatStore((state) => state.addUserMessage)
-  const createAssistantMessageStub = useChatStore((state) => state.createAssistantMessageStub)
-  const clearValue = useInputStore((state) => state.clearValue)
+  // const newChat = useChatStore((state) => state.newChat)
+  // const chat = useChatStore((state) => state.chat)
+  // const addAssistantMessageEvent = useChatStore((state) => state.addAssistantMessageEvent)
 
-  const handleKeyDown: KeyboardEventHandler<HTMLInputElement> = (event) => {
-    if (event.key !== 'Enter' || event.nativeEvent.isComposing) {
-      return
-    }
+  // useEffect(() => {
+  //   return window.api.onSocketEvent((socketEvent) => {
+  //     if (socketEvent.type !== 'chat') {
+  //       return
+  //     }
 
-    addUserMessage(value)
-    window.api.sendChat(useChatStore.getState().chat)
-    clearValue()
-    createAssistantMessageStub()
-  }
+  //     addAssistantMessageEvent(socketEvent.data)
+  //   })
+  // }, [addAssistantMessageEvent])
 
+  // return (
+  //   <div className="space-y-3 p-6">
+  //     <ChatInput />
+  //     <button onClick={() => newChat()}>New Chat</button>
+  //     <Messages messages={chat.messages} />
+  //   </div>
+  // )
   return (
-    <div className="space-y-3 p-6">
-      <Input
-        placeholder="Enter text"
-        value={value}
-        onChange={(event) => setValue(event.target.value)}
-        onKeyDown={handleKeyDown}
-      />
-      <p className="text-sm text-gray-600">Current value: {value || 'Nothing typed yet.'}</p>
-
-      <button onClick={() => newChat()}>New Chat</button>
-
-      <pre>{JSON.stringify(chat, null, 2)}</pre>
-    </div>
+    <Home/>
   )
 }
 

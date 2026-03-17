@@ -2,7 +2,7 @@ import { create } from "zustand";
 
 export type SocketConnectionState = 'disconnected' | 'connecting' | 'connected' | 'reconnecting'
 
-type SocketStore = {
+interface SocketStore {
     connectionState: SocketConnectionState
     setConnectionState: (state: SocketConnectionState) => void
 }

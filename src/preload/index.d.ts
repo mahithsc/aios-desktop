@@ -1,8 +1,10 @@
 import { ElectronAPI } from '@electron-toolkit/preload'
 import type { Chat } from '../shared/chat'
+import type { WSEnvelope } from '../shared/ws'
 
 interface AppAPI {
   sendChat: (chat: Chat) => void
+  onSocketEvent: (listener: (event: WSEnvelope) => void) => () => void
 }
 
 declare global {

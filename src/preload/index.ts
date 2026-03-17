@@ -1,10 +1,22 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import { electronAPI } from '@electron-toolkit/preload'
 import type { Chat } from '../shared/chat'
+import type { WSEnvelope } from '../shared/ws'
 
 // Custom APIs for renderer
 const api = {
-  sendChat: (chat: Chat) => ipcRenderer.send('renderer:send-chat', chat)
+  sendChat: (chat: Chat) => ipcRenderer.send('renderer:send-chat', chat),
+  onSocketEvent: (listener: (event: WSEnvelope) => void) => {
+    const subscription = (_event: Electron.IpcRendererEvent, socketEvent: WSEnvelope): void => {
+      listener(socketEvent)
+    }
+
+    ipcRenderer.on('main:socket-event', subscription)
+
+    return () => {
+      ipcRenderer.removeListener('main:socket-event', subscription)
+    }
+  }
 }
 
 // Use `contextBridge` APIs to expose Electron APIs to
