@@ -1,5 +1,3 @@
-import type { Chat } from "./chat"
-
 export type WSEnvelopeTypes = 'chat'
 
 

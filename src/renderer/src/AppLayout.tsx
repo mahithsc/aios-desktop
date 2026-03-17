@@ -20,12 +20,12 @@ const AppLayout = (): JSX.Element => {
       return <Agents />
     }
 
-    return <Home />
+    return <Home onOpenAgents={() => setActiveTab('agents')} />
   }, [activeTab])
 
   return (
-    <main className="min-h-screen bg-white px-6 py-5 text-stone-950 sm:px-8 sm:py-6">
-      <div className="mx-auto flex min-h-screen w-full max-w-6xl flex-col">
+    <main className="h-screen overflow-hidden bg-white px-6 py-5 text-stone-950 sm:px-8 sm:py-6">
+      <div className="mx-auto flex h-full w-full max-w-6xl min-h-0 flex-col overflow-hidden">
         <header className="grid grid-cols-[1fr_auto_1fr] items-center">
           <div className="flex items-center gap-3">
             <div className="flex h-9 w-9 items-center justify-center rounded-full border border-stone-200 bg-white text-xs">
@@ -67,7 +67,15 @@ const AppLayout = (): JSX.Element => {
           </div>
         </header>
 
-        <div className="flex-1 pt-10 sm:pt-12">{content}</div>
+        <div
+          className={`flex-1 ${
+            activeTab === 'agents'
+              ? 'min-h-0 overflow-hidden pt-4 sm:pt-5'
+              : 'flex min-h-0 items-start justify-center pt-20 sm:pt-24'
+          }`}
+        >
+          {content}
+        </div>
       </div>
     </main>
   )
