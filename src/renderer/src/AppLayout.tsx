@@ -1,4 +1,4 @@
-import type { JSX } from 'react'
+import type { CSSProperties, JSX } from 'react'
 import { useMemo, useState } from 'react'
 import Agents from './pages/agents/Agents'
 import Home from './pages/home/Home'
@@ -10,6 +10,9 @@ const tabs: Array<{ id: TabId; label: string }> = [
   { id: 'home', label: 'Home' },
   { id: 'agents', label: 'Agents' }
 ]
+
+const dragRegionStyle = { WebkitAppRegion: 'drag' } as CSSProperties
+const noDragRegionStyle = { WebkitAppRegion: 'no-drag' } as CSSProperties
 
 const AppLayout = (): JSX.Element => {
   const [activeTab, setActiveTab] = useState<TabId>('home')
@@ -24,9 +27,10 @@ const AppLayout = (): JSX.Element => {
   }, [activeTab])
 
   return (
-    <main className="h-screen overflow-hidden bg-white px-6 py-5 text-stone-950 sm:px-8 sm:py-6">
-      <div className="mx-auto flex h-full w-full max-w-6xl min-h-0 flex-col overflow-hidden">
-        <header className="grid grid-cols-[1fr_auto_1fr] items-center">
+    <main className="flex h-screen flex-col overflow-hidden bg-white px-6 pb-5 text-stone-950 sm:px-8 sm:pb-6">
+      <div className="h-8 shrink-0 sm:h-9" style={dragRegionStyle} />
+      <div className="mx-auto flex min-h-0 w-full max-w-6xl flex-1 flex-col overflow-hidden">
+        <header className="grid grid-cols-[1fr_auto_1fr] items-center" style={dragRegionStyle}>
           <div className="flex items-center gap-3">
             <div className="flex h-9 w-9 items-center justify-center rounded-full border border-stone-200 bg-white text-xs">
               III
@@ -35,6 +39,7 @@ const AppLayout = (): JSX.Element => {
               type="button"
               onClick={() => newChat()}
               className="rounded-full border border-stone-200 bg-white px-4 py-2 text-sm text-stone-700 transition hover:bg-stone-50"
+              style={noDragRegionStyle}
             >
               <span className="inline-flex items-center gap-1.5">
                 <span>+</span>
@@ -43,7 +48,10 @@ const AppLayout = (): JSX.Element => {
             </button>
           </div>
 
-          <nav className="justify-self-center flex items-center gap-1 rounded-full border border-stone-200 bg-white p-1">
+          <nav
+            className="justify-self-center flex items-center gap-1 rounded-full border border-stone-200 bg-white p-1"
+            style={noDragRegionStyle}
+          >
             {tabs.map((tab) => {
               const isActive = tab.id === activeTab
 
