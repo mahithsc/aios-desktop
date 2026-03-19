@@ -1,6 +1,7 @@
 import type { JSX, KeyboardEvent } from 'react'
 import { useChatStore } from '../../store/useChatSessionStore'
 import { useInputStore } from '../../store/useInputStore'
+import ChatComposer from '../agents/components/ChatComposer'
 
 type HomeProps = {
   onOpenAgents: () => void
@@ -27,8 +28,10 @@ const Home = ({ onOpenAgents }: HomeProps): JSX.Element => {
     onOpenAgents()
   }
 
-  const handleKeyDown = (event: KeyboardEvent<HTMLInputElement>): void => {
-    if (event.key !== 'Enter' || event.nativeEvent.isComposing) {
+  const handleKeyDown = (
+    event: KeyboardEvent<HTMLInputElement | HTMLTextAreaElement>
+  ): void => {
+    if (event.key !== 'Enter' || event.nativeEvent.isComposing || event.shiftKey) {
       return
     }
 
@@ -44,64 +47,14 @@ const Home = ({ onOpenAgents }: HomeProps): JSX.Element => {
         </h1>
       </div>
 
-      <div className="flex w-full max-w-2xl items-center gap-2.5 rounded-full border border-stone-200 bg-white px-3.5 py-2.5">
-        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-stone-500">
-          <svg
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="1.8"
-            className="h-4 w-4"
-            aria-hidden="true"
-          >
-            <path d="M12 5v14" />
-            <path d="M5 12h14" />
-          </svg>
-        </div>
-
-        <input
-          type="text"
-          placeholder="Ask anything"
-          value={value}
-          onChange={(event) => setValue(event.target.value)}
-          onKeyDown={handleKeyDown}
-          className="w-full bg-transparent text-sm text-black outline-none placeholder:text-stone-400"
-        />
-
-        <button
-          type="button"
-          onClick={handleSubmit}
-          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-black text-white transition hover:bg-stone-800"
-          aria-label="Start chat"
-        >
-          <svg
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="1.8"
-            className="h-4 w-4"
-            aria-hidden="true"
-          >
-            <path d="M12 19V5" />
-            <path d="m6 11 6-6 6 6" />
-          </svg>
-        </button>
-      </div>
-
-      <section className="w-full max-w-2xl">
-        <h2 className="text-sm font-medium text-stone-900">Debrief</h2>
-        <div className="mt-3 px-4 py-5 text-sm text-stone-500">No debrief yet</div>
-      </section>
-
-      <section className="w-full max-w-2xl">
-        <h2 className="text-sm font-medium text-stone-900">Apps</h2>
-        <div className="mt-3 px-4 py-5 text-sm text-stone-500">No apps yet</div>
-      </section>
-
-      <section className="w-full max-w-2xl">
-        <h2 className="text-sm font-medium text-stone-900">Skills</h2>
-        <div className="mt-3 px-4 py-5 text-sm text-stone-500">No skills yet</div>
-      </section>
+      <ChatComposer
+        value={value}
+        onChange={setValue}
+        onKeyDown={handleKeyDown}
+        onSubmit={handleSubmit}
+        fixed={false}
+        placeholder="Ask anything"
+      />
     </div>
   )
 }

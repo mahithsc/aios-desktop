@@ -263,8 +263,8 @@ const Agents = (): JSX.Element => {
     clearValue()
   }
 
-  const handleKeyDown = (event: KeyboardEvent<HTMLInputElement>): void => {
-    if (event.key !== 'Enter' || event.nativeEvent.isComposing) {
+  const handleKeyDown = (event: KeyboardEvent<HTMLInputElement | HTMLTextAreaElement>): void => {
+    if (event.key !== 'Enter' || event.nativeEvent.isComposing || event.shiftKey) {
       return
     }
 
