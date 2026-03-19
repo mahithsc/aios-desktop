@@ -138,16 +138,26 @@ export const useChatStore = create<ChatStore>((set) => ({
         return state
       }
 
+      const messageStatus = getAssistantMessageStatus(event)
+
       nextMessages[targetIndex] = {
         ...message,
         updatedAt: event.createdAt,
-        status: getAssistantMessageStatus(event),
+        status: messageStatus,
         events: [...message.events, event]
       }
+
+      const chatStatus =
+        messageStatus === 'complete'
+          ? 'idle'
+          : messageStatus === 'error'
+            ? 'error'
+            : state.chat.status
 
       return {
         chat: {
           ...state.chat,
+          status: chatStatus,
           updatedAt: event.createdAt,
           messages: nextMessages
         }

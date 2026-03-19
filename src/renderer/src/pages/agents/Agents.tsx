@@ -3,6 +3,7 @@ import { useChatStore } from '../../store/useChatSessionStore'
 import { useInputStore } from '../../store/useInputStore'
 import type { AssistantMessage, StreamErrorEvent, TokenEvent } from 'src/shared/chat'
 import ChatComposer from './components/ChatComposer'
+import Markdown from '../../components/Markdown'
 
 const getAssistantText = (message: AssistantMessage): string => {
   return message.events
@@ -156,7 +157,7 @@ const getAssistantFallbackText = (message: AssistantMessage): string => {
     return ''
   }
 
-  return message.status === 'error' ? 'The response failed.' : '...'
+  return message.status === 'error' ? 'The response failed.' : ''
 }
 
 const getAssistantStreamError = (message: AssistantMessage): string | null => {
@@ -167,57 +168,51 @@ const getAssistantStreamError = (message: AssistantMessage): string | null => {
   return streamError?.error ?? null
 }
 
+const TOOL_INPUT_TRUNCATE = 80
+
+const getToolInputSummary = (input?: string): string | null => {
+  if (!input) return null
+  const oneLine = input.replace(/\n/g, ' ').trim()
+  if (oneLine.length <= TOOL_INPUT_TRUNCATE) return oneLine
+  return `${oneLine.slice(0, TOOL_INPUT_TRUNCATE)}…`
+}
+
 const ToolCallCard = ({
   item
 }: {
   item: Extract<AssistantRenderItem, { type: 'tool' }>
 }): JSX.Element => {
-  const statusLabel =
-    item.status === 'running' ? 'Running' : item.status === 'error' ? 'Failed' : 'Completed'
-  const statusClasses =
-    item.status === 'running'
-      ? 'bg-amber-100 text-amber-800'
-      : item.status === 'error'
-        ? 'bg-red-100 text-red-700'
-        : 'bg-emerald-100 text-emerald-700'
+  const inputSummary = getToolInputSummary(item.input)
+  const isRunning = item.status === 'running'
 
   return (
-    <div className="rounded-2xl border border-stone-200 bg-stone-50 px-4 py-3 text-sm leading-6 text-stone-700">
-      <div className="flex flex-wrap items-center gap-2">
-        <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${statusClasses}`}>
-          {statusLabel}
-        </span>
-        <span className="font-medium text-stone-900">{item.toolName}</span>
-      </div>
-
-      {item.input ? <ToolCallPayload label="Input" value={item.input} /> : null}
-      {item.output ? <ToolCallPayload label="Output" value={item.output} /> : null}
-      {item.error ? <ToolCallPayload label="Error" value={item.error} /> : null}
+    <div
+      className={`flex items-baseline gap-2 text-xs text-stone-500 ${isRunning ? 'animate-pulse' : ''}`}
+    >
+      <span className="font-medium text-stone-700">{item.toolName}</span>
+      {inputSummary ? (
+        <span className="truncate font-mono text-stone-400">{inputSummary}</span>
+      ) : null}
+      {item.status === 'complete' ? <span className="text-[11px] text-stone-900">✓</span> : null}
+      {item.status === 'error' ? <span className="text-[11px] text-red-500">✕</span> : null}
     </div>
   )
 }
 
-const ToolCallPayload = ({ label, value }: { label: string; value: string }): JSX.Element => {
-  return (
-    <div className="mt-3">
-      <div className="mb-1 text-[11px] font-medium uppercase tracking-[0.12em] text-stone-500">
-        {label}
-      </div>
-      <pre className="overflow-x-auto whitespace-pre-wrap wrap-break-word rounded-xl bg-white px-3 py-2 font-mono text-xs leading-5 text-stone-700">
-        {value}
-      </pre>
-    </div>
-  )
-}
+const StreamingIndicator = (): JSX.Element => (
+  <div className="animate-pulse text-sm font-medium text-stone-400">Running...</div>
+)
 
 const AssistantMessageContent = ({ message }: { message: AssistantMessage }): JSX.Element => {
   const items = getAssistantRenderItems(message)
   const fallback = getAssistantFallbackText(message)
   const streamError = getAssistantStreamError(message)
+  const isActive = message.status === 'pending' || message.status === 'streaming'
 
   if (items.length === 0) {
     return (
       <div className="space-y-3">
+        {isActive ? <StreamingIndicator /> : null}
         {fallback ? <div className="whitespace-pre-wrap wrap-break-word">{fallback}</div> : null}
         {streamError ? (
           <div className="whitespace-pre-wrap wrap-break-word rounded-xl border border-red-200 bg-red-50 px-2 py-1 text-sm leading-6 text-red-700">
@@ -232,13 +227,12 @@ const AssistantMessageContent = ({ message }: { message: AssistantMessage }): JS
     <div className="space-y-3">
       {items.map((item) =>
         item.type === 'text' ? (
-          <div key={item.id} className="whitespace-pre-wrap wrap-break-word">
-            {item.value}
-          </div>
+          <Markdown key={item.id}>{item.value}</Markdown>
         ) : (
           <ToolCallCard key={item.id} item={item} />
         )
       )}
+      {isActive ? <StreamingIndicator /> : null}
       {streamError ? (
         <div className="whitespace-pre-wrap wrap-break-word rounded-xl border border-red-200 bg-red-50 px-2 py-1 text-sm leading-6 text-red-700">
           {streamError}
@@ -295,7 +289,7 @@ const Agents = (): JSX.Element => {
                 <div
                   className={
                     isAssistant
-                      ? 'text-[15px] leading-8 text-stone-800'
+                      ? 'text-sm leading-7 text-stone-800'
                       : 'inline-block rounded-[18px] bg-stone-100 px-3 py-2 text-sm leading-6 text-stone-700'
                   }
                 >
