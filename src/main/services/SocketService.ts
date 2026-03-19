@@ -175,6 +175,14 @@ export class SocketService {
       }
 
       this.emitError(event)
+
+      // Some Electron/main-process WebSocket failures only emit `error`
+      // during the initial handshake and never follow with `close`.
+      // Treat non-open socket errors as a disconnect so reconnect logic runs.
+      if (socket.readyState !== SOCKET_OPEN) {
+        this.socket = null
+        this.scheduleReconnect()
+      }
     }
 
     socket.onclose = (event) => {

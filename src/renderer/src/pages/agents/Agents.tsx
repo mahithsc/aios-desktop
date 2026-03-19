@@ -1,7 +1,7 @@
 import type { JSX, KeyboardEvent } from 'react'
 import { useChatStore } from '../../store/useChatSessionStore'
 import { useInputStore } from '../../store/useInputStore'
-import type { AssistantMessage, TokenEvent } from 'src/shared/chat'
+import type { AssistantMessage, StreamErrorEvent, TokenEvent } from 'src/shared/chat'
 import ChatComposer from './components/ChatComposer'
 
 const getAssistantText = (message: AssistantMessage): string => {
@@ -127,7 +127,10 @@ const getAssistantRenderItems = (message: AssistantMessage): AssistantRenderItem
         toolCallId: event.toolCallId,
         toolName: event.toolName,
         status: event.type === 'tool_call_end' ? 'complete' : 'error',
-        output: event.type === 'tool_call_end' ? truncateToolPayload(formatToolPayload(event.output)) : undefined,
+        output:
+          event.type === 'tool_call_end'
+            ? truncateToolPayload(formatToolPayload(event.output))
+            : undefined,
         error: event.type === 'tool_call_error' ? event.error : undefined
       })
     }
@@ -139,6 +142,11 @@ const getAssistantRenderItems = (message: AssistantMessage): AssistantRenderItem
 }
 
 const getAssistantFallbackText = (message: AssistantMessage): string => {
+  const streamError = message.events.some((event) => event.type === 'stream_error')
+  if (streamError) {
+    return ''
+  }
+
   if (getAssistantText(message)) {
     return ''
   }
@@ -149,6 +157,14 @@ const getAssistantFallbackText = (message: AssistantMessage): string => {
   }
 
   return message.status === 'error' ? 'The response failed.' : '...'
+}
+
+const getAssistantStreamError = (message: AssistantMessage): string | null => {
+  const streamError = [...message.events]
+    .reverse()
+    .find((event): event is StreamErrorEvent => event.type === 'stream_error')
+
+  return streamError?.error ?? null
 }
 
 const ToolCallCard = ({
@@ -197,9 +213,19 @@ const ToolCallPayload = ({ label, value }: { label: string; value: string }): JS
 const AssistantMessageContent = ({ message }: { message: AssistantMessage }): JSX.Element => {
   const items = getAssistantRenderItems(message)
   const fallback = getAssistantFallbackText(message)
+  const streamError = getAssistantStreamError(message)
 
   if (items.length === 0) {
-    return <div className="whitespace-pre-wrap wrap-break-word">{fallback}</div>
+    return (
+      <div className="space-y-3">
+        {fallback ? <div className="whitespace-pre-wrap wrap-break-word">{fallback}</div> : null}
+        {streamError ? (
+          <div className="whitespace-pre-wrap wrap-break-word rounded-xl border border-red-200 bg-red-50 px-2 py-1 text-sm leading-6 text-red-700">
+            {streamError}
+          </div>
+        ) : null}
+      </div>
+    )
   }
 
   return (
@@ -213,6 +239,11 @@ const AssistantMessageContent = ({ message }: { message: AssistantMessage }): JS
           <ToolCallCard key={item.id} item={item} />
         )
       )}
+      {streamError ? (
+        <div className="whitespace-pre-wrap wrap-break-word rounded-xl border border-red-200 bg-red-50 px-2 py-1 text-sm leading-6 text-red-700">
+          {streamError}
+        </div>
+      ) : null}
     </div>
   )
 }
