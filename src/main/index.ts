@@ -25,6 +25,13 @@ app.whenReady().then(() => {
   // IPC test
   ipcMain.on('ping', () => console.log('pong'))
 
+  ipcMain.on('overlay:set-ignore-mouse-events', (event, ignore: boolean) => {
+    const win = BrowserWindow.fromWebContents(event.sender)
+    if (!win || win === mainWindow) return
+    console.log('[overlay] set-ignore-mouse-events:', ignore)
+    win.setIgnoreMouseEvents(ignore, { forward: true })
+  })
+
   ipcMain.on('renderer:send-chat', (_event, chat: Chat) => {
     console.log('Sending chat to server:', chat)
     const formattedEvent: WSEnvelope = {
@@ -53,7 +60,7 @@ app.whenReady().then(() => {
   })
 
   socketService.connect(SERVER_URL + '/ws')
-  createMainWindow()
+  const mainWindow = createMainWindow()
 
   app.on('activate', function () {
     // On macOS it's common to re-create a window in the app when the

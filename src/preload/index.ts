@@ -6,6 +6,7 @@ import type { WSEnvelope } from '../shared/ws'
 // Custom APIs for renderer
 const api = {
   sendChat: (chat: Chat) => ipcRenderer.send('renderer:send-chat', chat),
+  setIgnoreMouseEvents: (ignore: boolean) => ipcRenderer.send('overlay:set-ignore-mouse-events', ignore),
   onSocketEvent: (listener: (event: WSEnvelope) => void) => {
     const subscription = (_event: Electron.IpcRendererEvent, socketEvent: WSEnvelope): void => {
       listener(socketEvent)

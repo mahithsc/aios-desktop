@@ -4,6 +4,7 @@ import type { WSEnvelope } from '../shared/ws'
 
 interface AppAPI {
   sendChat: (chat: Chat) => void
+  setIgnoreMouseEvents: (ignore: boolean) => void
   onSocketEvent: (listener: (event: WSEnvelope) => void) => () => void
 }
 
