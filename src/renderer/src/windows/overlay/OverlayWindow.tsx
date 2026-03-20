@@ -22,7 +22,7 @@ const OverlayWindow = ({ isOpen, onClose }: OverlayWindowProps): JSX.Element | n
       }}
       onClose={onClose}
     >
-      <div className="h-full w-full pt-12">
+      <div className="h-full w-full pt-12 px-5">
         <DesktopWidget />
       </div>
     </ChildWindow>
