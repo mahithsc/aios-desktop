@@ -1,9 +1,6 @@
-import type { CSSProperties, JSX } from 'react'
+import type { JSX } from 'react'
 import ChildWindow from '../ChildWindow'
 import DesktopWidget from './DesktopWidget'
-
-const dragRegionStyle = { WebkitAppRegion: 'drag' } as CSSProperties
-const noDragRegionStyle = { WebkitAppRegion: 'no-drag' } as CSSProperties
 
 type OverlayWindowProps = {
   isOpen: boolean
@@ -26,7 +23,7 @@ const OverlayWindow = ({ isOpen, onClose }: OverlayWindowProps): JSX.Element | n
       onClose={onClose}
     >
       <div className="h-full w-full pt-12">
-        <DesktopWidget dragRegionStyle={dragRegionStyle} noDragRegionStyle={noDragRegionStyle} />
+        <DesktopWidget />
       </div>
     </ChildWindow>
   )

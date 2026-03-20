@@ -1,16 +1,26 @@
-import { useContext } from 'react'
+import { useCallback, useContext } from 'react'
 import { ChildWindowContext } from '../../ChildWindowContext'
 
-const useOverlayInteractable = () => {
+type OverlayInteractable = {
+  onMouseEnter: () => void
+  onMouseLeave: () => void
+}
+
+const useOverlayInteractable = (): OverlayInteractable => {
   const childWindow = useContext(ChildWindowContext)
 
-  const onMouseEnter = (): void => {
-    ;(childWindow as typeof window | null)?.api.setIgnoreMouseEvents(false)
-  }
+  const setIgnore = useCallback(
+    (ignore: boolean) => {
+      ;(childWindow as typeof window | null)?.api.setIgnoreMouseEvents(ignore)
+    },
+    [childWindow]
+  )
 
-  const onMouseLeave = (): void => {
-    ;(childWindow as typeof window | null)?.api.setIgnoreMouseEvents(true)
-  }
+  const onMouseEnter = useCallback(() => setIgnore(false), [setIgnore])
+
+  const onMouseLeave = useCallback(() => {
+    setIgnore(true)
+  }, [setIgnore])
 
   return { onMouseEnter, onMouseLeave }
 }
