@@ -1,11 +1,10 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import { electronAPI } from '@electron-toolkit/preload'
-import type { Chat } from '../shared/chat'
 import type { WSEnvelope } from '../shared/ws'
 
 // Custom APIs for renderer
 const api = {
-  sendChat: (chat: Chat) => ipcRenderer.send('renderer:send-chat', chat),
+  sendSocketMessage: (message: WSEnvelope) => ipcRenderer.send('renderer:send-socket-message', message),
   setIgnoreMouseEvents: (ignore: boolean) => ipcRenderer.send('overlay:set-ignore-mouse-events', ignore),
   onSocketEvent: (listener: (event: WSEnvelope) => void) => {
     const subscription = (_event: Electron.IpcRendererEvent, socketEvent: WSEnvelope): void => {

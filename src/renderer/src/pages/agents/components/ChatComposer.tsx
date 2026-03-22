@@ -72,12 +72,12 @@ const ChatComposer = ({
 
   const wrapperClasses = fixed
     ? 'fixed inset-x-0 bottom-6 z-20 flex justify-center px-6'
-    : 'flex w-full max-w-2xl justify-center'
+    : 'mx-auto flex w-full max-w-184 justify-center'
 
   if (isMultiline) {
     return (
       <div className={wrapperClasses}>
-        <div className="flex w-full max-w-2xl flex-col gap-2 rounded-3xl border border-stone-200 bg-white px-3.5 py-2.5">
+        <div className="flex w-full max-w-184 flex-col gap-2 rounded-3xl border border-stone-200 bg-white px-3.5 py-2.5">
           <textarea
             ref={textareaRef}
             value={value}
@@ -97,7 +97,7 @@ const ChatComposer = ({
 
   return (
     <div className={wrapperClasses}>
-      <div className="flex w-full max-w-2xl items-center gap-2.5 rounded-full border border-stone-200 bg-white px-3.5 py-2.5">
+      <div className="flex w-full max-w-184 items-center gap-2.5 rounded-full border border-stone-200 bg-white px-3.5 py-2.5">
         <input
           type="text"
           value={value}

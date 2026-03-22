@@ -16,7 +16,10 @@ const ChatInput = (): JSX.Element => {
     }
 
     addUserMessage(value)
-    window.api.sendChat(useChatStore.getState().chat)
+    window.api.sendSocketMessage({
+      type: 'chat',
+      data: useChatStore.getState().chat
+    })
     clearValue()
     createAssistantMessageStub()
   }

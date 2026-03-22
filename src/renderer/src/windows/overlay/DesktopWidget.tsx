@@ -30,7 +30,10 @@ const DesktopWidget = (): JSX.Element => {
 
     setIsPressed(true)
     addUserMessage(nextValue)
-    window.api.sendChat(useChatStore.getState().chat)
+    window.api.sendSocketMessage({
+      type: 'chat',
+      data: useChatStore.getState().chat
+    })
     createAssistantMessageStub()
     clearValue()
     window.setTimeout(() => setIsPressed(false), 120)

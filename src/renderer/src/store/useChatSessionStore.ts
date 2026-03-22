@@ -1,4 +1,4 @@
-import { AssistantMessage, Chat, LLMEvent, UserMessage } from 'src/shared/chat'
+import { AssistantMessage, Chat, ChatMetadata, LLMEvent, UserMessage } from 'src/shared/chat'
 import { create } from 'zustand'
 
 const createDefaultChat = (): Chat => {
@@ -75,16 +75,24 @@ const getAssistantMessageStatus = (event: LLMEvent): AssistantMessage['status'] 
 
 interface ChatStore {
   chat: Chat
+  chatHistory: ChatMetadata[]
   addUserMessage: (message: string) => void
   createAssistantMessageStub: () => void
   addAssistantMessageEvent: (event: LLMEvent) => void
+  setChat: (chat: Chat) => void
+  setChatHistory: (chatHistory: ChatMetadata[]) => void
   newChat: () => void
 }
 
 export const useChatStore = create<ChatStore>((set) => ({
   chat: createDefaultChat(),
+  chatHistory: [],
 
   newChat: () => set({ chat: createDefaultChat() }),
+
+  setChat: (chat) => set({ chat }),
+
+  setChatHistory: (chatHistory) => set({ chatHistory }),
 
   addUserMessage: (message) =>
     set((state) => {

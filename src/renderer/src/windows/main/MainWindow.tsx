@@ -2,7 +2,6 @@ import type { CSSProperties, JSX } from 'react'
 import { useMemo, useState } from 'react'
 import Agents from '../../pages/agents/Agents'
 import Home from '../../pages/home/Home'
-import { useChatStore } from '../../store/useChatSessionStore'
 
 type TabId = 'home' | 'agents'
 
@@ -21,7 +20,6 @@ const noDragRegionStyle = { WebkitAppRegion: 'no-drag' } as CSSProperties
 
 const MainWindow = ({ isOverlayOpen, onOpenOverlay }: MainWindowProps): JSX.Element => {
   const [activeTab, setActiveTab] = useState<TabId>('home')
-  const newChat = useChatStore((state) => state.newChat)
 
   const content = useMemo(() => {
     if (activeTab === 'agents') {
@@ -40,38 +38,16 @@ const MainWindow = ({ isOverlayOpen, onOpenOverlay }: MainWindowProps): JSX.Elem
   }, [activeTab, isOverlayOpen])
 
   return (
-    <main className="flex h-screen flex-col overflow-hidden bg-white px-6 pb-5 text-stone-950 sm:px-8 sm:pb-6">
-      <div className="h-8 shrink-0 sm:h-9" style={dragRegionStyle} />
-      <div className="mx-auto flex min-h-0 w-full max-w-6xl flex-1 flex-col overflow-hidden">
-        <header className="grid grid-cols-[1fr_auto_1fr] items-center" style={dragRegionStyle}>
-          <div className="flex items-center gap-3">
-            <div className="flex h-9 w-9 items-center justify-center rounded-full border border-stone-200 bg-white text-xs">
-              III
-            </div>
-            <button
-              type="button"
-              onClick={() => newChat()}
-              className="rounded-full border border-stone-200 bg-white px-4 py-2 text-sm text-stone-700 transition hover:bg-stone-50"
-              style={noDragRegionStyle}
-            >
-              <span className="inline-flex items-center gap-1.5">
-                <span>+</span>
-                <span>New Chat</span>
-              </span>
-            </button>
-            <button
-              type="button"
-              onClick={onOpenOverlay}
-              disabled={isOverlayOpen}
-              className="rounded-full border border-stone-200 bg-white px-4 py-2 text-sm text-stone-700 transition hover:bg-stone-50 disabled:cursor-not-allowed disabled:text-stone-400 disabled:hover:bg-white"
-              style={noDragRegionStyle}
-            >
-              {isOverlayOpen ? 'Desktop Widget Open' : 'Open Desktop Widget'}
-            </button>
-          </div>
+    <main className="flex h-screen flex-col overflow-hidden bg-white text-stone-950">
+      <div className="relative flex min-h-0 w-full flex-1 flex-col overflow-hidden">
+        <header
+          className="pointer-events-none absolute inset-x-0 top-0 z-10 grid grid-cols-[1fr_auto_1fr] items-center px-2 pt-2 sm:px-3 sm:pt-3"
+          style={dragRegionStyle}
+        >
+          <div />
 
           <nav
-            className="justify-self-center flex items-center gap-1 rounded-full border border-stone-200 bg-white p-1"
+            className="pointer-events-auto justify-self-center flex items-center gap-1 rounded-full border border-stone-200 bg-white p-1"
             style={noDragRegionStyle}
           >
             {tabs.map((tab) => {
@@ -92,16 +68,29 @@ const MainWindow = ({ isOverlayOpen, onOpenOverlay }: MainWindowProps): JSX.Elem
             })}
           </nav>
 
-          <div className="justify-self-end rounded-full border border-stone-200 bg-white px-4 py-2 text-sm">
-            GPT 5.4
+          <div
+            className="pointer-events-auto justify-self-end flex items-center gap-3"
+            style={noDragRegionStyle}
+          >
+            <button
+              type="button"
+              onClick={onOpenOverlay}
+              disabled={isOverlayOpen}
+              className="rounded-full border border-stone-200 bg-white px-4 py-2 text-sm text-stone-700 transition hover:bg-stone-50 disabled:cursor-not-allowed disabled:text-stone-400 disabled:hover:bg-white"
+            >
+              {isOverlayOpen ? 'Desktop Widget Open' : 'Open Desktop Widget'}
+            </button>
+            <div className="rounded-full border border-stone-200 bg-white px-4 py-2 text-sm">
+              GPT 5.4
+            </div>
           </div>
         </header>
 
         <div
           className={`flex-1 ${
             activeTab === 'agents'
-              ? 'min-h-0 overflow-hidden pt-4 sm:pt-5'
-              : 'flex min-h-0 items-start justify-center pt-20 sm:pt-24'
+              ? 'min-h-0 overflow-hidden'
+              : 'flex min-h-0 items-start justify-center overflow-y-auto pt-20 sm:pt-24'
           }`}
         >
           {content}

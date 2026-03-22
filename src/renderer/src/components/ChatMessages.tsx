@@ -283,7 +283,9 @@ const ChatMessages = ({
   compact = false
 }: ChatMessagesProps): JSX.Element => {
   const listGapClassName = compact ? 'space-y-4' : 'space-y-8'
-  const assistantContainerClassName = compact ? 'max-w-2xl' : 'max-w-3xl'
+  const assistantContainerClassName = compact
+    ? 'min-w-0 w-full max-w-184'
+    : 'min-w-0 w-full max-w-184'
   const assistantTextClassName = darkMode
     ? compact
       ? 'text-sm leading-6 text-white/92'
@@ -307,9 +309,16 @@ const ChatMessages = ({
         const isAssistant = message.role === 'assistant'
 
         return (
-          <div key={message.id} className={`flex ${isAssistant ? 'justify-start' : 'justify-end'}`}>
+          <div
+            key={message.id}
+            className={`flex min-w-0 ${isAssistant ? 'justify-start' : 'justify-end'}`}
+          >
             <div className={isAssistant ? assistantContainerClassName : 'max-w-md'}>
-              <div className={isAssistant ? assistantTextClassName : userBubbleClassName}>
+              <div
+                className={
+                  isAssistant ? `min-w-0 max-w-full ${assistantTextClassName}` : userBubbleClassName
+                }
+              >
                 {message.role === 'assistant' ? (
                   <AssistantMessageContent
                     message={message}

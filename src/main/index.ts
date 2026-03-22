@@ -3,7 +3,6 @@ import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import { SocketService } from './services/SocketService'
 import { createMainWindow } from './windows/createMainWindow'
 import { SERVER_URL } from '../shared/config'
-import type { Chat } from '../shared/chat'
 import type { WSEnvelope } from '../shared/ws'
 
 const socketService = new SocketService((attempt) => Math.min(1_000 * 2 ** (attempt - 1), 10_000))
@@ -32,14 +31,9 @@ app.whenReady().then(() => {
     win.setIgnoreMouseEvents(ignore, { forward: true })
   })
 
-  ipcMain.on('renderer:send-chat', (_event, chat: Chat) => {
-    console.log('Sending chat to server:', chat)
-    const formattedEvent: WSEnvelope = {
-      type: 'chat',
-      data: chat
-    }
-    socketService.send(formattedEvent)
-    console.log('[renderer] Sent chat:', chat.id)
+  ipcMain.on('renderer:send-socket-message', (_event, envelope: WSEnvelope) => {
+    socketService.send(envelope)
+    console.log(`[renderer] Sent socket message: ${envelope.type}`)
   })
 
   socketService.onMessage((message) => {
