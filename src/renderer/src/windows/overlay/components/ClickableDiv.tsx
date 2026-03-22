@@ -1,4 +1,4 @@
-import type { CSSProperties, JSX, ReactNode } from 'react'
+import { useEffect, type CSSProperties, type JSX, type ReactNode } from 'react'
 import useOverlayInteractable from '../hooks/useOverlayInteractable'
 
 type ClickableDivProps = {
@@ -9,6 +9,12 @@ type ClickableDivProps = {
 
 const ClickableDiv = ({ children, className, style }: ClickableDivProps): JSX.Element => {
   const { onMouseEnter, onMouseLeave } = useOverlayInteractable()
+
+  useEffect(() => {
+    return () => {
+      onMouseLeave()
+    }
+  }, [onMouseLeave])
 
   return (
     <div

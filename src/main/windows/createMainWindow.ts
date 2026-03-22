@@ -45,7 +45,10 @@ const getChildWindowOptions = (): Electron.BrowserWindowConstructorOptions => {
 const configureChildWindow = (window: BrowserWindow): void => {
   window.setAlwaysOnTop(true, 'screen-saver')
   window.setVisibleOnAllWorkspaces(true, {
-    visibleOnFullScreen: true
+    visibleOnFullScreen: true,
+    // Prevent macOS from transforming the app into a UIElement app,
+    // which hides the Dock icon when the overlay window is shown.
+    skipTransformProcessType: process.platform === 'darwin'
   })
   window.setIgnoreMouseEvents(true, {
     forward: true

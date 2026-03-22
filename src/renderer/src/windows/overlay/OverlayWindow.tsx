@@ -1,6 +1,7 @@
 import type { JSX } from 'react'
 import ChildWindow from '../ChildWindow'
 import DesktopWidget from './DesktopWidget'
+import ClickableSonner from './components/ClickableSonner'
 
 type OverlayWindowProps = {
   isOpen: boolean
@@ -23,6 +24,7 @@ const OverlayWindow = ({ isOpen, onClose }: OverlayWindowProps): JSX.Element | n
       onClose={onClose}
     >
       <div className="h-full w-full pt-12 px-5">
+        <ClickableSonner />
         <DesktopWidget />
       </div>
     </ChildWindow>

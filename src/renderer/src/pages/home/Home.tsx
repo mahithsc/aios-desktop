@@ -1,4 +1,5 @@
 import type { JSX, KeyboardEvent } from 'react'
+import { toast } from 'sonner'
 import { useChatStore } from '../../store/useChatSessionStore'
 import { useInputStore } from '../../store/useInputStore'
 import ChatComposer from '../agents/components/ChatComposer'
@@ -28,9 +29,7 @@ const Home = ({ onOpenAgents }: HomeProps): JSX.Element => {
     onOpenAgents()
   }
 
-  const handleKeyDown = (
-    event: KeyboardEvent<HTMLInputElement | HTMLTextAreaElement>
-  ): void => {
+  const handleKeyDown = (event: KeyboardEvent<HTMLInputElement | HTMLTextAreaElement>): void => {
     if (event.key !== 'Enter' || event.nativeEvent.isComposing || event.shiftKey) {
       return
     }
@@ -46,6 +45,14 @@ const Home = ({ onOpenAgents }: HomeProps): JSX.Element => {
           Hi, Mahith what are you working on
         </h1>
       </div>
+
+      <button
+        type="button"
+        onClick={() => toast.success('Test notification from Sonner')}
+        className="rounded-full border border-stone-200 bg-white px-4 py-2 text-sm text-stone-700 transition hover:bg-stone-50"
+      >
+        Show Toast
+      </button>
 
       <ChatComposer
         value={value}
