@@ -121,7 +121,7 @@ const Agents = (): JSX.Element => {
   return (
     <div className="flex h-full min-h-0 w-full overflow-hidden">
       <aside className="flex w-64 shrink-0 flex-col border-r border-stone-200 bg-white">
-        <div className="px-4 pb-0 pt-10">
+        <div className="px-4 pb-0 pt-12 sm:pt-14">
           <button
             type="button"
             onClick={newChat}
