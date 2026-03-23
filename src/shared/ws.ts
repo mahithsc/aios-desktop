@@ -1,6 +1,20 @@
 import type { Chat, ChatMetadata, LLMEvent } from './chat'
+import type {
+  ProcessSnapshotListRequest,
+  Run,
+  RunEvent,
+  RunResumeRequest,
+  RunSnapshot
+} from './run'
 
-export type WSEnvelopeTypes = 'chat' | 'chat-history'
+export type WSEnvelopeTypes =
+  | 'chat'
+  | 'chat-history'
+  | 'chat.submit'
+  | 'run.accepted'
+  | 'run.event'
+  | 'process.snapshot.list'
+  | 'run.resume'
 
 export interface ChatWSEnvelope {
   type: 'chat'
@@ -12,4 +26,36 @@ export interface ChatHistoryWSEnvelope {
   data: ChatMetadata[] | Chat | string | null
 }
 
-export type WSEnvelope = ChatWSEnvelope | ChatHistoryWSEnvelope
+export interface ChatSubmitWSEnvelope {
+  type: 'chat.submit'
+  data: Chat
+}
+
+export interface RunAcceptedWSEnvelope {
+  type: 'run.accepted'
+  data: Run
+}
+
+export interface RunEventWSEnvelope {
+  type: 'run.event'
+  data: RunEvent
+}
+
+export interface ProcessSnapshotListWSEnvelope {
+  type: 'process.snapshot.list'
+  data: ProcessSnapshotListRequest | RunSnapshot[] | null
+}
+
+export interface RunResumeWSEnvelope {
+  type: 'run.resume'
+  data: RunResumeRequest | RunEvent[]
+}
+
+export type WSEnvelope =
+  | ChatWSEnvelope
+  | ChatHistoryWSEnvelope
+  | ChatSubmitWSEnvelope
+  | RunAcceptedWSEnvelope
+  | RunEventWSEnvelope
+  | ProcessSnapshotListWSEnvelope
+  | RunResumeWSEnvelope

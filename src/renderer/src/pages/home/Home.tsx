@@ -60,7 +60,7 @@ const Home = ({ onOpenAgents }: HomeProps): JSX.Element => {
 
     addUserMessage(nextValue)
     window.api.sendSocketMessage({
-      type: 'chat',
+      type: 'chat.submit',
       data: useChatStore.getState().chat
     })
     createAssistantMessageStub()
