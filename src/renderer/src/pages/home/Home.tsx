@@ -12,6 +12,24 @@ const formatTimestamp = (timestamp: number): string =>
     minute: '2-digit'
   }).format(timestamp)
 
+const getStatusLabel = (status?: ChatMetadata['status']): string => {
+  if (status === 'streaming') return 'Running'
+  if (status === 'error') return 'Error'
+  return 'Idle'
+}
+
+const getStatusClassName = (status?: ChatMetadata['status']): string => {
+  if (status === 'streaming') {
+    return 'bg-amber-100 text-amber-700'
+  }
+
+  if (status === 'error') {
+    return 'bg-red-100 text-red-700'
+  }
+
+  return 'bg-stone-100 text-stone-600'
+}
+
 const ChatHistoryCard = ({
   chat,
   onClick
@@ -30,7 +48,11 @@ const ChatHistoryCard = ({
       </div>
       <div className="mt-1 text-xs text-stone-500">Updated {formatTimestamp(chat.updatedAt)}</div>
       <div className="mt-2 flex items-center gap-2 text-[11px] uppercase tracking-[0.14em] text-stone-400">
-        <span>{chat.status ?? 'idle'}</span>
+        <span
+          className={`rounded-full px-2 py-0.5 font-medium tracking-[0.08em] ${getStatusClassName(chat.status)}`}
+        >
+          {getStatusLabel(chat.status)}
+        </span>
         <span aria-hidden="true">•</span>
         <span className="font-mono normal-case tracking-normal text-stone-500">{chat.id.slice(0, 8)}</span>
       </div>
@@ -58,12 +80,17 @@ const Home = ({ onOpenAgents }: HomeProps): JSX.Element => {
       return
     }
 
+    const turnId = crypto.randomUUID()
     addUserMessage(nextValue)
+    const chat = useChatStore.getState().chat
+    createAssistantMessageStub(turnId)
     window.api.sendSocketMessage({
       type: 'chat.submit',
-      data: useChatStore.getState().chat
+      data: {
+        chat,
+        turnId
+      }
     })
-    createAssistantMessageStub()
     clearValue()
     onOpenAgents()
   }

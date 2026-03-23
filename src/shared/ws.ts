@@ -28,7 +28,10 @@ export interface ChatHistoryWSEnvelope {
 
 export interface ChatSubmitWSEnvelope {
   type: 'chat.submit'
-  data: Chat
+  data: {
+    chat: Chat
+    turnId: string
+  }
 }
 
 export interface RunAcceptedWSEnvelope {

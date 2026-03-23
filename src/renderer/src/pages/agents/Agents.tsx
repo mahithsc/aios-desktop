@@ -15,14 +15,34 @@ const formatTimestamp = (timestamp: number): string =>
 
 const getChatTitle = (chat: ChatMetadata): string => chat.title?.trim() || 'Untitled chat'
 
+const getStatusLabel = (status?: ChatMetadata['status']): string => {
+  if (status === 'streaming') return 'Running'
+  if (status === 'error') return 'Error'
+  return 'Idle'
+}
+
+const getStatusClassName = (status?: ChatMetadata['status']): string => {
+  if (status === 'streaming') {
+    return 'bg-amber-100 text-amber-700'
+  }
+
+  if (status === 'error') {
+    return 'bg-red-100 text-red-700'
+  }
+
+  return 'bg-stone-100 text-stone-600'
+}
+
 const ChatHistoryItem = ({
   title,
   subtitle,
+  status,
   isActive,
   onClick
 }: {
   title: string
   subtitle: string
+  status?: ChatMetadata['status']
   isActive: boolean
   onClick: () => void
 }): JSX.Element => (
@@ -34,7 +54,14 @@ const ChatHistoryItem = ({
       isActive ? 'bg-stone-100' : 'hover:bg-stone-100'
     }`}
   >
-    <div className="truncate text-sm text-stone-900">{title}</div>
+    <div className="flex items-center justify-between gap-2">
+      <div className="truncate text-sm text-stone-900">{title}</div>
+      <span
+        className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium uppercase tracking-[0.08em] ${getStatusClassName(status)}`}
+      >
+        {getStatusLabel(status)}
+      </span>
+    </div>
     <div className="mt-1 truncate text-xs text-stone-500">{subtitle}</div>
   </button>
 )
@@ -61,12 +88,17 @@ const Agents = (): JSX.Element => {
       return
     }
 
+    const turnId = crypto.randomUUID()
     addUserMessage(nextValue)
+    const chat = useChatStore.getState().chat
+    createAssistantMessageStub(turnId)
     window.api.sendSocketMessage({
       type: 'chat.submit',
-      data: useChatStore.getState().chat
+      data: {
+        chat,
+        turnId
+      }
     })
-    createAssistantMessageStub()
     clearValue()
   }
 
@@ -109,6 +141,7 @@ const Agents = (): JSX.Element => {
                 key={historyChat.id}
                 title={getChatTitle(historyChat)}
                 subtitle={`Updated ${formatTimestamp(historyChat.updatedAt)}`}
+                status={historyChat.status}
                 isActive={historyChat.id === chat.id}
                 onClick={() => handleLoadChat(historyChat.id)}
               />
@@ -123,6 +156,23 @@ const Agents = (): JSX.Element => {
 
       <section className="min-w-0 flex-1 overflow-hidden pt-14 sm:pt-18">
         <div className="relative mx-auto flex h-full min-h-0 w-full max-w-184 flex-col overflow-hidden">
+          <div className="px-4 pb-3 sm:px-6">
+            <div className="flex items-center justify-between gap-3">
+              <div className="min-w-0">
+                <h1 className="truncate text-sm font-medium text-stone-900">
+                  {getChatTitle(chat)}
+                </h1>
+                <div className="text-xs text-stone-500">
+                  Updated {formatTimestamp(chat.updatedAt)}
+                </div>
+              </div>
+              <span
+                className={`shrink-0 rounded-full px-2.5 py-1 text-[11px] font-medium uppercase tracking-[0.08em] ${getStatusClassName(chat.status)}`}
+              >
+                {getStatusLabel(chat.status)}
+              </span>
+            </div>
+          </div>
           <div className="flex-1 min-h-0 space-y-8 overflow-y-auto px-4 sm:px-6">
             <ChatMessages messages={chat.messages} bottomSpacerClassName="h-28 sm:h-32" />
           </div>

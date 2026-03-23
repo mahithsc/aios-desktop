@@ -21,6 +21,7 @@ export interface Run {
   updatedAt: UnixMs
   chatId?: string | null
   sourceId?: string | null
+  turnId?: string | null
 }
 
 export interface RunEventPayload {

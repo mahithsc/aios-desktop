@@ -42,6 +42,7 @@ export interface UserMessage extends BaseMessage {
 
 export interface AssistantMessage extends BaseMessage {
   role: 'assistant'
+  runId?: string | null
   events: LLMEvent[]
 }
 

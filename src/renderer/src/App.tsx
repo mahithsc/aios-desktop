@@ -2,7 +2,7 @@ import { useEffect, useState, type JSX } from 'react'
 import MainWindow from '@renderer/windows/main/MainWindow'
 import OverlayWindow from '@renderer/windows/overlay/OverlayWindow'
 import type { Chat, ChatMetadata, LLMEvent } from 'src/shared/chat'
-import type { RunEvent } from 'src/shared/run'
+import type { Run, RunEvent } from 'src/shared/run'
 import { useChatStore } from './store/useChatSessionStore'
 
 const isLLMEvent = (value: unknown): value is LLMEvent =>
@@ -16,6 +16,9 @@ const isChatHistory = (value: unknown): value is ChatMetadata[] =>
 
 const isRunEvent = (value: unknown): value is RunEvent =>
   typeof value === 'object' && value !== null && 'runId' in value && 'event' in value
+
+const isRun = (value: unknown): value is Run =>
+  typeof value === 'object' && value !== null && 'id' in value && 'kind' in value
 
 const toChatEvent = (runEvent: RunEvent): LLMEvent | null => {
   const { data } = runEvent.event
@@ -96,6 +99,7 @@ const toChatEvent = (runEvent: RunEvent): LLMEvent | null => {
 
 const App = (): JSX.Element => {
   const addAssistantMessageEvent = useChatStore((state) => state.addAssistantMessageEvent)
+  const bindAssistantRun = useChatStore((state) => state.bindAssistantRun)
   const setChat = useChatStore((state) => state.setChat)
   const setChatHistory = useChatStore((state) => state.setChatHistory)
   const [isOverlayOpen, setIsOverlayOpen] = useState(false)
@@ -121,7 +125,14 @@ const App = (): JSX.Element => {
       }
 
       if (socketEvent.type === 'chat' && isLLMEvent(socketEvent.data)) {
-        addAssistantMessageEvent(socketEvent.data)
+        addAssistantMessageEvent('legacy-chat-stream', socketEvent.data)
+        return
+      }
+
+      if (socketEvent.type === 'run.accepted' && isRun(socketEvent.data)) {
+        if (socketEvent.data.chatId === useChatStore.getState().chat.id && socketEvent.data.turnId) {
+          bindAssistantRun(socketEvent.data.turnId, socketEvent.data.id)
+        }
         return
       }
 
@@ -135,10 +146,10 @@ const App = (): JSX.Element => {
 
       const chatEvent = toChatEvent(socketEvent.data)
       if (chatEvent) {
-        addAssistantMessageEvent(chatEvent)
+        addAssistantMessageEvent(socketEvent.data.runId, chatEvent)
       }
     })
-  }, [addAssistantMessageEvent, setChat, setChatHistory])
+  }, [addAssistantMessageEvent, bindAssistantRun, setChat, setChatHistory])
 
   return (
     <>
