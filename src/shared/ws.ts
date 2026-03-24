@@ -1,5 +1,10 @@
 import type { Chat, ChatMetadata, LLMEvent } from './chat'
 import type {
+  Notification,
+  NotificationDismissRequest,
+  NotificationListResponse
+} from './notification'
+import type {
   ProcessSnapshotListRequest,
   Run,
   RunEvent,
@@ -11,6 +16,9 @@ export type WSEnvelopeTypes =
   | 'chat'
   | 'chat-history'
   | 'chat.submit'
+  | 'notification.list'
+  | 'notification.created'
+  | 'notification.dismiss'
   | 'run.accepted'
   | 'run.event'
   | 'process.snapshot.list'
@@ -32,6 +40,21 @@ export interface ChatSubmitWSEnvelope {
     chat: Chat
     turnId: string
   }
+}
+
+export interface NotificationListWSEnvelope {
+  type: 'notification.list'
+  data: NotificationListResponse | null
+}
+
+export interface NotificationCreatedWSEnvelope {
+  type: 'notification.created'
+  data: Notification
+}
+
+export interface NotificationDismissWSEnvelope {
+  type: 'notification.dismiss'
+  data: NotificationDismissRequest | Notification
 }
 
 export interface RunAcceptedWSEnvelope {
@@ -58,6 +81,9 @@ export type WSEnvelope =
   | ChatWSEnvelope
   | ChatHistoryWSEnvelope
   | ChatSubmitWSEnvelope
+  | NotificationListWSEnvelope
+  | NotificationCreatedWSEnvelope
+  | NotificationDismissWSEnvelope
   | RunAcceptedWSEnvelope
   | RunEventWSEnvelope
   | ProcessSnapshotListWSEnvelope
