@@ -36,6 +36,31 @@ app.whenReady().then(() => {
     console.log(`[renderer] Sent socket message: ${envelope.type}`)
   })
 
+  ipcMain.on(
+    'renderer:log',
+    (
+      _event,
+      payload: {
+        level?: 'debug' | 'info' | 'warn' | 'error'
+        message?: string
+        details?: unknown
+      }
+    ) => {
+      const level = payload.level ?? 'debug'
+      const message = payload.message ?? 'Renderer log'
+      const logger =
+        level === 'error'
+          ? console.error
+          : level === 'warn'
+            ? console.warn
+            : level === 'info'
+              ? console.info
+              : console.debug
+
+      logger(`[renderer] ${message}`, payload.details)
+    }
+  )
+
   socketService.onMessage((message) => {
     console.log(`[socket] event -> ${message.type}`, message)
     for (const window of BrowserWindow.getAllWindows()) {

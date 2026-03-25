@@ -1,5 +1,6 @@
 import { useEffect, type ReactNode } from 'react'
 import {
+  getChatCanvasArtifact,
   isChat,
   isChatHistory,
   isLLMEvent,
@@ -9,6 +10,7 @@ import {
   isRunEvent
 } from '../lib/socketEventGuards'
 import { runEventToChatEvent } from '../lib/runEventToChatEvent'
+import { useCanvasStore } from '../store/useCanvasStore'
 import { useChatStore } from '../store/useChatSessionStore'
 import { useNotificationStore } from '../store/useNotificationStore'
 
@@ -21,6 +23,7 @@ const SocketSyncProvider = ({ children }: SocketSyncProviderProps): ReactNode =>
   const bindAssistantRun = useChatStore((state) => state.bindAssistantRun)
   const setChat = useChatStore((state) => state.setChat)
   const setChatHistory = useChatStore((state) => state.setChatHistory)
+  const setCanvasArtifact = useCanvasStore((state) => state.setCanvasArtifact)
   const addNotification = useNotificationStore((state) => state.addNotification)
   const dismissNotification = useNotificationStore((state) => state.dismissNotification)
   const setNotifications = useNotificationStore((state) => state.setNotifications)
@@ -87,8 +90,71 @@ const SocketSyncProvider = ({ children }: SocketSyncProviderProps): ReactNode =>
         return
       }
 
+      console.debug('[canvas]', 'Received run.event socket payload.', {
+        runId: socketEvent.data.runId,
+        sequence: socketEvent.data.sequence,
+        chatId: socketEvent.data.chatId,
+        currentChatId: useChatStore.getState().chat.id,
+        eventType: socketEvent.data.event.type,
+        toolName: socketEvent.data.event.data?.toolName,
+        toolCallId: socketEvent.data.event.data?.toolCallId,
+        output: socketEvent.data.event.data?.output
+      })
+      window.api.logToConsole('debug', '[canvas] Received run.event socket payload.', {
+        runId: socketEvent.data.runId,
+        sequence: socketEvent.data.sequence,
+        chatId: socketEvent.data.chatId,
+        currentChatId: useChatStore.getState().chat.id,
+        eventType: socketEvent.data.event.type,
+        toolName: socketEvent.data.event.data?.toolName,
+        toolCallId: socketEvent.data.event.data?.toolCallId,
+        output: socketEvent.data.event.data?.output
+      })
+
       if (socketEvent.data.chatId !== useChatStore.getState().chat.id) {
+        console.debug('[canvas]', 'Ignoring run.event for inactive chat.', {
+          runEventChatId: socketEvent.data.chatId,
+          currentChatId: useChatStore.getState().chat.id,
+          runId: socketEvent.data.runId,
+          sequence: socketEvent.data.sequence
+        })
+        window.api.logToConsole('debug', '[canvas] Ignoring run.event for inactive chat.', {
+          runEventChatId: socketEvent.data.chatId,
+          currentChatId: useChatStore.getState().chat.id,
+          runId: socketEvent.data.runId,
+          sequence: socketEvent.data.sequence
+        })
         return
+      }
+
+      const canvasArtifact = getChatCanvasArtifact(socketEvent.data)
+      if (canvasArtifact) {
+        console.debug('[canvas]', 'Writing canvas artifact from socket event into store.', {
+          chatId: canvasArtifact.chatId,
+          runId: canvasArtifact.runId,
+          toolCallId: canvasArtifact.toolCallId,
+          artifact: canvasArtifact.artifact
+        })
+        window.api.logToConsole('debug', '[canvas] Writing canvas artifact from socket event into store.', {
+          chatId: canvasArtifact.chatId,
+          runId: canvasArtifact.runId,
+          toolCallId: canvasArtifact.toolCallId,
+          artifact: canvasArtifact.artifact
+        })
+        setCanvasArtifact(canvasArtifact)
+      } else {
+        console.debug('[canvas]', 'No canvas artifact extracted from run event.', {
+          runId: socketEvent.data.runId,
+          sequence: socketEvent.data.sequence,
+          eventType: socketEvent.data.event.type,
+          toolName: socketEvent.data.event.data?.toolName
+        })
+        window.api.logToConsole('debug', '[canvas] No canvas artifact extracted from run event.', {
+          runId: socketEvent.data.runId,
+          sequence: socketEvent.data.sequence,
+          eventType: socketEvent.data.event.type,
+          toolName: socketEvent.data.event.data?.toolName
+        })
       }
 
       const chatEvent = runEventToChatEvent(socketEvent.data)
@@ -101,6 +167,7 @@ const SocketSyncProvider = ({ children }: SocketSyncProviderProps): ReactNode =>
     addNotification,
     bindAssistantRun,
     dismissNotification,
+    setCanvasArtifact,
     setChat,
     setChatHistory,
     setNotifications
