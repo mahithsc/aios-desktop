@@ -13,6 +13,7 @@ export interface MessageAttachment {
   filePath: string
   mimeType?: string
   sizeBytes?: number
+  uploadedAt?: UnixMs
 }
 
 export interface ChatMetadata {

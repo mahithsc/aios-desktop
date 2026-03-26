@@ -28,13 +28,18 @@ const DesktopWidget = (): JSX.Element => {
       return
     }
 
+    const turnId = crypto.randomUUID()
     setIsPressed(true)
     addUserMessage(nextValue)
+    const nextChat = useChatStore.getState().chat
+    createAssistantMessageStub(turnId)
     window.api.sendSocketMessage({
-      type: 'chat',
-      data: useChatStore.getState().chat
+      type: 'chat.submit',
+      data: {
+        chat: nextChat,
+        turnId
+      }
     })
-    createAssistantMessageStub()
     clearValue()
     window.setTimeout(() => setIsPressed(false), 120)
   }

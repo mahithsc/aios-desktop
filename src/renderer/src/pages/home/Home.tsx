@@ -1,5 +1,6 @@
 import type { JSX, KeyboardEvent } from 'react'
-import type { ChatMetadata } from 'src/shared/chat'
+import { useState } from 'react'
+import type { ChatMetadata, MessageAttachment } from 'src/shared/chat'
 import { useChatStore } from '../../store/useChatSessionStore'
 import { useInputStore } from '../../store/useInputStore'
 import { useNotificationStore } from '../../store/useNotificationStore'
@@ -72,32 +73,38 @@ const Home = ({ onOpenAgents }: HomeProps): JSX.Element => {
   const value = useInputStore((state) => state.value)
   const setValue = useInputStore((state) => state.setValue)
   const clearValue = useInputStore((state) => state.clearValue)
+  const chat = useChatStore((state) => state.chat)
   const addUserMessage = useChatStore((state) => state.addUserMessage)
   const chatHistory = useChatStore((state) => state.chatHistory)
   const createAssistantMessageStub = useChatStore((state) => state.createAssistantMessageStub)
   const notifications = useNotificationStore((state) => state.notifications)
   const dismissNotification = useNotificationStore((state) => state.dismissNotification)
+  const [attachmentsByChatId, setAttachmentsByChatId] = useState<
+    Record<string, MessageAttachment[]>
+  >({})
+  const attachments = attachmentsByChatId[chat.id] ?? []
   const recentChats = [...chatHistory].sort((a, b) => b.updatedAt - a.updatedAt).slice(0, 6)
 
   const handleSubmit = (): void => {
     const nextValue = value.trim()
 
-    if (!nextValue) {
+    if (!nextValue && attachments.length === 0) {
       return
     }
 
     const turnId = crypto.randomUUID()
-    addUserMessage(nextValue)
-    const chat = useChatStore.getState().chat
+    addUserMessage({ content: nextValue, attachments })
+    const nextChat = useChatStore.getState().chat
     createAssistantMessageStub(turnId)
     window.api.sendSocketMessage({
       type: 'chat.submit',
       data: {
-        chat,
+        chat: nextChat,
         turnId
       }
     })
     clearValue()
+    setAttachmentsByChatId((current) => ({ ...current, [chat.id]: [] }))
     onOpenAgents()
   }
 
@@ -137,10 +144,18 @@ const Home = ({ onOpenAgents }: HomeProps): JSX.Element => {
       </div>
 
       <ChatComposer
+        chatId={chat.id}
         value={value}
         onChange={setValue}
         onKeyDown={handleKeyDown}
         onSubmit={handleSubmit}
+        attachments={attachments}
+        onAttachmentsChange={(nextAttachments) => {
+          setAttachmentsByChatId((current) => ({
+            ...current,
+            [chat.id]: nextAttachments
+          }))
+        }}
         fixed={false}
         placeholder="Ask anything"
       />

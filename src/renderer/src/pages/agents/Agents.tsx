@@ -1,5 +1,5 @@
-import type { ChatMetadata } from 'src/shared/chat'
-import { useEffect, useMemo, type JSX, type KeyboardEvent } from 'react'
+import type { ChatMetadata, MessageAttachment } from 'src/shared/chat'
+import { useEffect, useMemo, useState, type JSX, type KeyboardEvent } from 'react'
 import CanvasPanel from '../../components/CanvasPanel'
 import { useChatStore } from '../../store/useChatSessionStore'
 import { useCanvasStore } from '../../store/useCanvasStore'
@@ -78,6 +78,10 @@ const Agents = (): JSX.Element => {
   const addUserMessage = useChatStore((state) => state.addUserMessage)
   const createAssistantMessageStub = useChatStore((state) => state.createAssistantMessageStub)
   const canvasArtifact = useCanvasStore((state) => state.artifactsByChatId[chat.id])
+  const [attachmentsByChatId, setAttachmentsByChatId] = useState<
+    Record<string, MessageAttachment[]>
+  >({})
+  const attachments = attachmentsByChatId[chat.id] ?? []
 
   const previousChats = useMemo(
     () => [...chatHistory].sort((a, b) => b.updatedAt - a.updatedAt),
@@ -100,22 +104,23 @@ const Agents = (): JSX.Element => {
   const handleSubmit = (): void => {
     const nextValue = value.trim()
 
-    if (!nextValue) {
+    if (!nextValue && attachments.length === 0) {
       return
     }
 
     const turnId = crypto.randomUUID()
-    addUserMessage(nextValue)
-    const chat = useChatStore.getState().chat
+    addUserMessage({ content: nextValue, attachments })
+    const nextChat = useChatStore.getState().chat
     createAssistantMessageStub(turnId)
     window.api.sendSocketMessage({
       type: 'chat.submit',
       data: {
-        chat,
+        chat: nextChat,
         turnId
       }
     })
     clearValue()
+    setAttachmentsByChatId((current) => ({ ...current, [chat.id]: [] }))
   }
 
   const handleKeyDown = (event: KeyboardEvent<HTMLInputElement | HTMLTextAreaElement>): void => {
@@ -200,10 +205,18 @@ const Agents = (): JSX.Element => {
             <div className="pointer-events-none absolute inset-x-0 bottom-0 z-0 h-14 bg-white sm:h-16" />
             <div className="relative z-10 mx-auto w-full max-w-184 px-4 pb-4 sm:px-6 sm:pb-6">
               <ChatComposer
+                chatId={chat.id}
                 value={value}
                 onChange={setValue}
                 onKeyDown={handleKeyDown}
                 onSubmit={handleSubmit}
+                attachments={attachments}
+                onAttachmentsChange={(nextAttachments) => {
+                  setAttachmentsByChatId((current) => ({
+                    ...current,
+                    [chat.id]: nextAttachments
+                  }))
+                }}
                 fixed={false}
               />
             </div>

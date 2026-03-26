@@ -15,13 +15,18 @@ const ChatInput = (): JSX.Element => {
       return
     }
 
+    const turnId = crypto.randomUUID()
     addUserMessage(value)
+    const chat = useChatStore.getState().chat
+    createAssistantMessageStub(turnId)
     window.api.sendSocketMessage({
-      type: 'chat',
-      data: useChatStore.getState().chat
+      type: 'chat.submit',
+      data: {
+        chat,
+        turnId
+      }
     })
     clearValue()
-    createAssistantMessageStub()
   }
 
   return (
