@@ -1,5 +1,12 @@
 import type { JSX } from 'react'
-import type { AssistantMessage, ChatMessage, StreamErrorEvent, TokenEvent } from 'src/shared/chat'
+import type {
+  AssistantMessage,
+  ChatMessage,
+  MessageAttachment,
+  StreamErrorEvent,
+  TokenEvent,
+  UserMessage
+} from 'src/shared/chat'
 import Markdown from './Markdown'
 
 type AssistantRenderItem =
@@ -220,6 +227,53 @@ const StreamingIndicator = ({ darkMode }: { darkMode: boolean }): JSX.Element =>
   </div>
 )
 
+const UserAttachmentList = ({
+  attachments,
+  darkMode
+}: {
+  attachments: MessageAttachment[]
+  darkMode: boolean
+}): JSX.Element | null => {
+  if (attachments.length === 0) {
+    return null
+  }
+
+  return (
+    <div className="mt-2 flex flex-wrap justify-end gap-2">
+      {attachments.map((attachment) => (
+        <div
+          key={attachment.id}
+          className={`inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs ${
+            darkMode ? 'bg-white/10 text-white/75' : 'bg-white text-stone-600'
+          }`}
+        >
+          <span>
+            {attachment.kind === 'image'
+              ? 'Image'
+              : attachment.kind === 'audio'
+                ? 'Audio'
+                : 'File'}
+          </span>
+          <span className="max-w-40 truncate">{attachment.name}</span>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+const UserMessageContent = ({
+  message,
+  darkMode
+}: {
+  message: UserMessage
+  darkMode: boolean
+}): JSX.Element => (
+  <div>
+    {message.content}
+    <UserAttachmentList attachments={message.attachments ?? []} darkMode={darkMode} />
+  </div>
+)
+
 const AssistantMessageContent = ({
   message,
   darkMode,
@@ -326,7 +380,7 @@ const ChatMessages = ({
                     compact={compact}
                   />
                 ) : (
-                  message.content
+                  <UserMessageContent message={message} darkMode={darkMode} />
                 )}
               </div>
             </div>

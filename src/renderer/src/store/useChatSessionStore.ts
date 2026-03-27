@@ -1,4 +1,11 @@
-import { AssistantMessage, Chat, ChatMetadata, LLMEvent, UserMessage } from 'src/shared/chat'
+import {
+  AssistantMessage,
+  Chat,
+  ChatMetadata,
+  LLMEvent,
+  MessageAttachment,
+  UserMessage
+} from 'src/shared/chat'
 import { create } from 'zustand'
 
 const createDefaultChat = (): Chat => {
@@ -13,8 +20,17 @@ const createDefaultChat = (): Chat => {
   }
 }
 
-const createUserMessage = (content: string): UserMessage => {
+type UserMessageInput =
+  | string
+  | {
+      content: string
+      attachments?: MessageAttachment[]
+    }
+
+const createUserMessage = (input: UserMessageInput): UserMessage => {
   const now = Date.now()
+  const content = typeof input === 'string' ? input : input.content
+  const attachments = typeof input === 'string' ? [] : (input.attachments ?? [])
 
   return {
     id: crypto.randomUUID(),
@@ -22,7 +38,8 @@ const createUserMessage = (content: string): UserMessage => {
     updatedAt: now,
     status: 'complete',
     role: 'user',
-    content
+    content,
+    attachments
   }
 }
 
@@ -108,7 +125,7 @@ const getAssistantMessageStatus = (event: LLMEvent): AssistantMessage['status'] 
 interface ChatStore {
   chat: Chat
   chatHistory: ChatMetadata[]
-  addUserMessage: (message: string) => void
+  addUserMessage: (message: UserMessageInput) => void
   createAssistantMessageStub: (turnId: string) => void
   bindAssistantRun: (turnId: string, runId: string) => void
   addAssistantMessageEvent: (runId: string, event: LLMEvent) => void

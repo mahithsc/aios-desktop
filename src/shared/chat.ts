@@ -4,7 +4,7 @@ export type ChatStatus = 'idle' | 'streaming' | 'error'
 
 export type MessageStatus = 'pending' | 'streaming' | 'complete' | 'error'
 
-export type AttachmentKind = 'image' | 'file'
+export type AttachmentKind = 'image' | 'file' | 'audio'
 
 export interface MessageAttachment {
   id: string
@@ -13,6 +13,7 @@ export interface MessageAttachment {
   filePath: string
   mimeType?: string
   sizeBytes?: number
+  uploadedAt?: UnixMs
 }
 
 export interface ChatMetadata {

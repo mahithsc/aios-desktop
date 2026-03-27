@@ -1,8 +1,11 @@
 import type { JSX, KeyboardEvent } from 'react'
-import type { ChatMetadata } from 'src/shared/chat'
+import { useState } from 'react'
+import type { ChatMetadata, MessageAttachment } from 'src/shared/chat'
 import { useChatStore } from '../../store/useChatSessionStore'
 import { useInputStore } from '../../store/useInputStore'
+import { useNotificationStore } from '../../store/useNotificationStore'
 import ChatComposer from '../agents/components/ChatComposer'
+import NotificationCard from './components/NotificationCard'
 
 const formatTimestamp = (timestamp: number): string =>
   new Intl.DateTimeFormat(undefined, {
@@ -54,7 +57,9 @@ const ChatHistoryCard = ({
           {getStatusLabel(chat.status)}
         </span>
         <span aria-hidden="true">•</span>
-        <span className="font-mono normal-case tracking-normal text-stone-500">{chat.id.slice(0, 8)}</span>
+        <span className="font-mono normal-case tracking-normal text-stone-500">
+          {chat.id.slice(0, 8)}
+        </span>
       </div>
     </button>
   )
@@ -68,30 +73,38 @@ const Home = ({ onOpenAgents }: HomeProps): JSX.Element => {
   const value = useInputStore((state) => state.value)
   const setValue = useInputStore((state) => state.setValue)
   const clearValue = useInputStore((state) => state.clearValue)
+  const chat = useChatStore((state) => state.chat)
   const addUserMessage = useChatStore((state) => state.addUserMessage)
   const chatHistory = useChatStore((state) => state.chatHistory)
   const createAssistantMessageStub = useChatStore((state) => state.createAssistantMessageStub)
+  const notifications = useNotificationStore((state) => state.notifications)
+  const dismissNotification = useNotificationStore((state) => state.dismissNotification)
+  const [attachmentsByChatId, setAttachmentsByChatId] = useState<
+    Record<string, MessageAttachment[]>
+  >({})
+  const attachments = attachmentsByChatId[chat.id] ?? []
   const recentChats = [...chatHistory].sort((a, b) => b.updatedAt - a.updatedAt).slice(0, 6)
 
   const handleSubmit = (): void => {
     const nextValue = value.trim()
 
-    if (!nextValue) {
+    if (!nextValue && attachments.length === 0) {
       return
     }
 
     const turnId = crypto.randomUUID()
-    addUserMessage(nextValue)
-    const chat = useChatStore.getState().chat
+    addUserMessage({ content: nextValue, attachments })
+    const nextChat = useChatStore.getState().chat
     createAssistantMessageStub(turnId)
     window.api.sendSocketMessage({
       type: 'chat.submit',
       data: {
-        chat,
+        chat: nextChat,
         turnId
       }
     })
     clearValue()
+    setAttachmentsByChatId((current) => ({ ...current, [chat.id]: [] }))
     onOpenAgents()
   }
 
@@ -112,6 +125,16 @@ const Home = ({ onOpenAgents }: HomeProps): JSX.Element => {
     onOpenAgents()
   }
 
+  const handleDismissNotification = (notificationId: string): void => {
+    dismissNotification(notificationId)
+    window.api.sendSocketMessage({
+      type: 'notification.dismiss',
+      data: {
+        id: notificationId
+      }
+    })
+  }
+
   return (
     <div className="mx-auto flex w-full max-w-3xl flex-col items-center gap-8">
       <div className="text-center">
@@ -121,13 +144,44 @@ const Home = ({ onOpenAgents }: HomeProps): JSX.Element => {
       </div>
 
       <ChatComposer
+        chatId={chat.id}
         value={value}
         onChange={setValue}
         onKeyDown={handleKeyDown}
         onSubmit={handleSubmit}
+        attachments={attachments}
+        onAttachmentsChange={(nextAttachments) => {
+          setAttachmentsByChatId((current) => ({
+            ...current,
+            [chat.id]: nextAttachments
+          }))
+        }}
         fixed={false}
         placeholder="Ask anything"
       />
+
+      <section className="w-full max-w-3xl">
+        <div className="mb-3 flex items-center justify-between">
+          <h2 className="text-sm font-medium text-stone-900">Notifications</h2>
+          <span className="text-xs text-stone-400">{notifications.length} active</span>
+        </div>
+
+        {notifications.length > 0 ? (
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+            {notifications.map((notification) => (
+              <NotificationCard
+                key={notification.id}
+                notification={notification}
+                onDismiss={handleDismissNotification}
+              />
+            ))}
+          </div>
+        ) : (
+          <div className="rounded-2xl border border-dashed border-stone-200 bg-stone-50 px-4 py-6 text-sm text-stone-500">
+            No active notifications.
+          </div>
+        )}
+      </section>
 
       <section className="w-full max-w-3xl">
         <div className="mb-3 flex items-center justify-between">
