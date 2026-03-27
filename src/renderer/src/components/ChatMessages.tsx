@@ -247,7 +247,13 @@ const UserAttachmentList = ({
             darkMode ? 'bg-white/10 text-white/75' : 'bg-white text-stone-600'
           }`}
         >
-          <span>{attachment.kind === 'image' ? 'Image' : 'File'}</span>
+          <span>
+            {attachment.kind === 'image'
+              ? 'Image'
+              : attachment.kind === 'audio'
+                ? 'Audio'
+                : 'File'}
+          </span>
           <span className="max-w-40 truncate">{attachment.name}</span>
         </div>
       ))}

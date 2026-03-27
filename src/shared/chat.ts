@@ -4,7 +4,7 @@ export type ChatStatus = 'idle' | 'streaming' | 'error'
 
 export type MessageStatus = 'pending' | 'streaming' | 'complete' | 'error'
 
-export type AttachmentKind = 'image' | 'file'
+export type AttachmentKind = 'image' | 'file' | 'audio'
 
 export interface MessageAttachment {
   id: string

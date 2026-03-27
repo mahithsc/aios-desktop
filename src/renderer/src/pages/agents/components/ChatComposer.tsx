@@ -70,7 +70,8 @@ const AttachmentChip = ({
 }): JSX.Element => (
   <div className="inline-flex items-center gap-2 rounded-full bg-stone-100 px-3 py-1.5 text-xs text-stone-700">
     <span className="max-w-44 truncate">
-      {attachment.kind === 'image' ? 'Image' : 'File'}: {attachment.name}
+      {attachment.kind === 'image' ? 'Image' : attachment.kind === 'audio' ? 'Audio' : 'File'}:{' '}
+      {attachment.name}
     </span>
     <button
       type="button"
