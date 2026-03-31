@@ -1,16 +1,17 @@
 import type { ChangeEvent, JSX, KeyboardEventHandler } from 'react'
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef } from 'react'
 import type { MessageAttachment } from 'src/shared/chat'
-import { uploadAttachments } from '../../../lib/attachments'
 
 type ChatComposerProps = {
-  chatId: string
   value: string
   onChange: (value: string) => void
   onKeyDown: KeyboardEventHandler<HTMLInputElement | HTMLTextAreaElement>
   onSubmit: () => void
   attachments: MessageAttachment[]
-  onAttachmentsChange: (attachments: MessageAttachment[]) => void
+  isUploading?: boolean
+  onFilesSelected: (files: File[]) => Promise<void> | void
+  onRemoveAttachment: (attachmentId: string) => void
+  uploadError?: string | null
   fixed?: boolean
   placeholder?: string
 }
@@ -26,7 +27,7 @@ const SendButton = ({
     type="button"
     onClick={onClick}
     disabled={disabled}
-    className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-black text-white transition hover:bg-stone-800 disabled:cursor-not-allowed disabled:bg-stone-300"
+    className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground transition hover:bg-accent disabled:cursor-not-allowed disabled:bg-muted disabled:text-muted-foreground"
     aria-label="Send message"
   >
     <svg
@@ -54,7 +55,7 @@ const AttachmentButton = ({
     type="button"
     onClick={onClick}
     disabled={disabled}
-    className="inline-flex items-center gap-2 rounded-full border border-stone-200 px-3 py-1.5 text-xs font-medium text-stone-700 transition hover:bg-stone-50 disabled:cursor-not-allowed disabled:text-stone-400"
+    className="inline-flex items-center gap-2 rounded-full border border-border bg-secondary px-3 py-1.5 text-xs font-medium text-secondary-foreground transition hover:bg-accent disabled:cursor-not-allowed disabled:text-muted-foreground"
   >
     <span className="text-sm leading-none">+</span>
     <span>{disabled ? 'Uploading...' : 'Attach files'}</span>
@@ -68,7 +69,7 @@ const AttachmentChip = ({
   attachment: MessageAttachment
   onRemove: (attachmentId: string) => void
 }): JSX.Element => (
-  <div className="inline-flex items-center gap-2 rounded-full bg-stone-100 px-3 py-1.5 text-xs text-stone-700">
+  <div className="inline-flex items-center gap-2 rounded-full bg-secondary px-3 py-1.5 text-xs text-secondary-foreground">
     <span className="max-w-44 truncate">
       {attachment.kind === 'image' ? 'Image' : attachment.kind === 'audio' ? 'Audio' : 'File'}:{' '}
       {attachment.name}
@@ -76,7 +77,7 @@ const AttachmentChip = ({
     <button
       type="button"
       onClick={() => onRemove(attachment.id)}
-      className="text-stone-500 transition hover:text-stone-800"
+      className="text-muted-foreground transition hover:text-foreground"
       aria-label={`Remove ${attachment.name}`}
     >
       x
@@ -85,20 +86,20 @@ const AttachmentChip = ({
 )
 
 const ChatComposer = ({
-  chatId,
   value,
   onChange,
   onKeyDown,
   onSubmit,
   attachments,
-  onAttachmentsChange,
+  isUploading = false,
+  onFilesSelected,
+  onRemoveAttachment,
+  uploadError = null,
   fixed = true,
   placeholder = 'Message an agent...'
 }: ChatComposerProps): JSX.Element => {
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
-  const [isUploading, setIsUploading] = useState(false)
-  const [uploadError, setUploadError] = useState<string | null>(null)
 
   useEffect(() => {
     const el = textareaRef.current
@@ -123,21 +124,7 @@ const ChatComposer = ({
       return
     }
 
-    setIsUploading(true)
-    setUploadError(null)
-
-    try {
-      const uploadedAttachments = await uploadAttachments(chatId, selectedFiles)
-      onAttachmentsChange([...attachments, ...uploadedAttachments])
-    } catch (error) {
-      setUploadError(error instanceof Error ? error.message : 'Attachment upload failed.')
-    } finally {
-      setIsUploading(false)
-    }
-  }
-
-  const handleRemoveAttachment = (attachmentId: string): void => {
-    onAttachmentsChange(attachments.filter((attachment) => attachment.id !== attachmentId))
+    await onFilesSelected(selectedFiles)
   }
 
   const wrapperClasses = fixed
@@ -146,7 +133,7 @@ const ChatComposer = ({
 
   return (
     <div className={wrapperClasses}>
-      <div className="flex w-full max-w-184 flex-col gap-3 rounded-3xl border border-stone-200 bg-white px-3.5 py-2.5">
+      <div className="flex w-full max-w-184 flex-col gap-3 rounded-3xl border border-border bg-card px-3.5 py-2.5">
         <input
           ref={fileInputRef}
           type="file"
@@ -163,7 +150,7 @@ const ChatComposer = ({
               <AttachmentChip
                 key={attachment.id}
                 attachment={attachment}
-                onRemove={handleRemoveAttachment}
+                onRemove={onRemoveAttachment}
               />
             ))}
           </div>
@@ -176,18 +163,18 @@ const ChatComposer = ({
           onKeyDown={onKeyDown}
           placeholder={placeholder}
           rows={1}
-          className="max-h-64 w-full resize-none bg-transparent text-sm leading-6 text-black outline-none placeholder:text-stone-400"
+          className="max-h-64 w-full resize-none bg-transparent text-sm leading-6 text-foreground outline-none placeholder:text-muted-foreground"
         />
 
         {uploadError ? (
-          <div className="rounded-2xl border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
+          <div className="rounded-2xl border border-red-500/30 bg-red-500/15 px-3 py-2 text-xs text-red-200">
             {uploadError}
           </div>
         ) : null}
 
         <div className="flex items-center justify-between gap-3">
           <AttachmentButton onClick={handleAttachClick} disabled={isUploading} />
-          <div className="flex items-center gap-2 text-xs text-stone-400">
+          <div className="flex items-center gap-2 text-xs text-muted-foreground">
             <span>
               {attachments.length > 0 ? `${attachments.length} attached` : 'No files attached'}
             </span>

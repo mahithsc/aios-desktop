@@ -1,11 +1,12 @@
-import type { ChatMetadata, MessageAttachment } from 'src/shared/chat'
-import { useEffect, useMemo, useState, type JSX, type KeyboardEvent } from 'react'
-import CanvasPanel from '../../components/CanvasPanel'
+import type { ChatMetadata } from 'src/shared/chat'
+import { useEffect, useMemo, type JSX, type KeyboardEvent } from 'react'
 import { useChatStore } from '../../store/useChatSessionStore'
 import { useCanvasStore } from '../../store/useCanvasStore'
 import { useInputStore } from '../../store/useInputStore'
 import ChatMessages from '../../components/ChatMessages'
 import ChatComposer from './components/ChatComposer'
+import { useChatAttachments } from '../../lib/chatAttachments'
+import { useFileDropTarget } from '../../lib/fileDropTarget'
 
 const formatTimestamp = (timestamp: number): string =>
   new Intl.DateTimeFormat(undefined, {
@@ -25,14 +26,14 @@ const getStatusLabel = (status?: ChatMetadata['status']): string => {
 
 const getStatusClassName = (status?: ChatMetadata['status']): string => {
   if (status === 'streaming') {
-    return 'bg-amber-100 text-amber-700'
+    return 'bg-secondary text-secondary-foreground'
   }
 
   if (status === 'error') {
-    return 'bg-red-100 text-red-700'
+    return 'bg-red-500/15 text-red-200'
   }
 
-  return 'bg-stone-100 text-stone-600'
+  return 'bg-muted text-muted-foreground'
 }
 
 const ChatHistoryItem = ({
@@ -53,18 +54,18 @@ const ChatHistoryItem = ({
     onClick={onClick}
     aria-current={isActive ? 'page' : undefined}
     className={`block w-full rounded-lg px-2 py-2 text-left transition ${
-      isActive ? 'bg-stone-100' : 'hover:bg-stone-100'
+      isActive ? 'bg-secondary' : 'hover:bg-accent'
     }`}
   >
     <div className="flex items-center justify-between gap-2">
-      <div className="truncate text-sm text-stone-900">{title}</div>
+      <div className="truncate text-sm text-foreground">{title}</div>
       <span
         className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium uppercase tracking-[0.08em] ${getStatusClassName(status)}`}
       >
         {getStatusLabel(status)}
       </span>
     </div>
-    <div className="mt-1 truncate text-xs text-stone-500">{subtitle}</div>
+    <div className="mt-1 truncate text-xs text-muted-foreground">{subtitle}</div>
   </button>
 )
 
@@ -78,10 +79,12 @@ const Agents = (): JSX.Element => {
   const addUserMessage = useChatStore((state) => state.addUserMessage)
   const createAssistantMessageStub = useChatStore((state) => state.createAssistantMessageStub)
   const canvasArtifact = useCanvasStore((state) => state.artifactsByChatId[chat.id])
-  const [attachmentsByChatId, setAttachmentsByChatId] = useState<
-    Record<string, MessageAttachment[]>
-  >({})
-  const attachments = attachmentsByChatId[chat.id] ?? []
+  const { attachments, clearAttachments, isUploading, removeAttachment, uploadError, uploadFiles } =
+    useChatAttachments(chat.id)
+  const { isDragActive, onDragEnter, onDragLeave, onDragOver, onDrop } = useFileDropTarget({
+    disabled: isUploading,
+    onFilesDropped: uploadFiles
+  })
 
   const previousChats = useMemo(
     () => [...chatHistory].sort((a, b) => b.updatedAt - a.updatedAt),
@@ -120,7 +123,7 @@ const Agents = (): JSX.Element => {
       }
     })
     clearValue()
-    setAttachmentsByChatId((current) => ({ ...current, [chat.id]: [] }))
+    clearAttachments()
   }
 
   const handleKeyDown = (event: KeyboardEvent<HTMLInputElement | HTMLTextAreaElement>): void => {
@@ -140,13 +143,28 @@ const Agents = (): JSX.Element => {
   }
 
   return (
-    <div className="flex h-full min-h-0 w-full overflow-hidden">
-      <aside className="flex w-64 shrink-0 flex-col border-r border-stone-200 bg-white">
+    <div
+      className="relative flex h-full min-h-0 w-full overflow-hidden bg-background"
+      onDragEnter={onDragEnter}
+      onDragLeave={onDragLeave}
+      onDragOver={onDragOver}
+      onDrop={(event) => {
+        void onDrop(event)
+      }}
+    >
+      {isDragActive ? (
+        <div className="pointer-events-none absolute inset-0 z-30 flex items-center justify-center bg-background/85 backdrop-blur-sm">
+          <div className="rounded-2xl border border-dashed border-primary/60 bg-card px-6 py-4 text-sm font-medium text-foreground shadow-lg">
+            Drop files to attach
+          </div>
+        </div>
+      ) : null}
+      <aside className="flex w-64 shrink-0 flex-col border-r border-border bg-card">
         <div className="px-4 pb-0 pt-12 sm:pt-14">
           <button
             type="button"
             onClick={newChat}
-            className="flex w-full items-center justify-center rounded-xl border border-stone-200 bg-white px-3 py-1.5 text-sm text-stone-700 transition hover:bg-stone-50"
+            className="flex w-full items-center justify-center rounded-xl border border-border bg-card px-3 py-1.5 text-sm text-foreground transition hover:bg-accent"
           >
             <span className="inline-flex items-center gap-1.5">
               <span>+</span>
@@ -168,7 +186,7 @@ const Agents = (): JSX.Element => {
               />
             ))
           ) : (
-            <div className="px-2 py-4 text-sm text-stone-500">
+            <div className="px-2 py-4 text-sm text-muted-foreground">
               Your past chats will appear here.
             </div>
           )}
@@ -180,10 +198,10 @@ const Agents = (): JSX.Element => {
           <div className="mx-auto w-full max-w-184 px-4 pb-3 sm:px-6">
             <div className="flex items-center justify-between gap-3">
               <div className="min-w-0">
-                <h1 className="truncate text-sm font-medium text-stone-900">
+                <h1 className="truncate text-sm font-medium text-foreground">
                   {getChatTitle(chat)}
                 </h1>
-                <div className="text-xs text-stone-500">
+                <div className="text-xs text-muted-foreground">
                   Updated {formatTimestamp(chat.updatedAt)}
                 </div>
               </div>
@@ -197,33 +215,34 @@ const Agents = (): JSX.Element => {
 
           <div className="flex-1 min-h-0 overflow-y-auto">
             <div className="mx-auto w-full max-w-184 px-4 sm:px-6">
-              <ChatMessages messages={chat.messages} bottomSpacerClassName="h-28 sm:h-32" />
+              <ChatMessages
+                messages={chat.messages}
+                bottomSpacerClassName="h-28 sm:h-32"
+                darkMode
+              />
             </div>
           </div>
 
           <div className="absolute inset-x-0 bottom-0">
-            <div className="pointer-events-none absolute inset-x-0 bottom-0 z-0 h-14 bg-white sm:h-16" />
+            <div className="pointer-events-none absolute inset-x-0 bottom-0 z-0 h-14 bg-background sm:h-16" />
             <div className="relative z-10 mx-auto w-full max-w-184 px-4 pb-4 sm:px-6 sm:pb-6">
               <ChatComposer
-                chatId={chat.id}
                 value={value}
                 onChange={setValue}
                 onKeyDown={handleKeyDown}
                 onSubmit={handleSubmit}
                 attachments={attachments}
-                onAttachmentsChange={(nextAttachments) => {
-                  setAttachmentsByChatId((current) => ({
-                    ...current,
-                    [chat.id]: nextAttachments
-                  }))
-                }}
+                isUploading={isUploading}
+                onFilesSelected={uploadFiles}
+                onRemoveAttachment={removeAttachment}
+                uploadError={uploadError}
                 fixed={false}
               />
             </div>
           </div>
         </div>
 
-        <CanvasPanel artifact={canvasArtifact} />
+        {/* <CanvasPanel artifact={canvasArtifact} /> */}
       </section>
     </div>
   )

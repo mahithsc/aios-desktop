@@ -9,17 +9,17 @@ const formatTimestamp = (timestamp: number): string =>
   }).format(timestamp)
 
 const levelStyles: Record<NotificationLevel, string> = {
-  info: 'border-stone-200 bg-white text-stone-900',
-  success: 'border-emerald-200 bg-emerald-50 text-emerald-950',
-  warning: 'border-amber-200 bg-amber-50 text-amber-950',
-  error: 'border-red-200 bg-red-50 text-red-950'
+  info: 'border-border bg-card text-foreground',
+  success: 'border-emerald-500/30 bg-emerald-500/15 text-emerald-100',
+  warning: 'border-amber-500/30 bg-amber-500/15 text-amber-100',
+  error: 'border-red-500/30 bg-red-500/15 text-red-100'
 }
 
 const levelBadgeStyles: Record<NotificationLevel, string> = {
-  info: 'bg-stone-100 text-stone-700',
-  success: 'bg-emerald-100 text-emerald-700',
-  warning: 'bg-amber-100 text-amber-700',
-  error: 'bg-red-100 text-red-700'
+  info: 'bg-secondary text-secondary-foreground',
+  success: 'bg-emerald-500/20 text-emerald-100',
+  warning: 'bg-amber-500/20 text-amber-100',
+  error: 'bg-red-500/20 text-red-100'
 }
 
 const dismissNotification = (notificationId: string): void => {
@@ -41,10 +41,10 @@ const NotificationCard = ({ notification }: { notification: Notification }): JSX
           >
             {notification.level}
           </span>
-          <span className="text-stone-400">{formatTimestamp(notification.createdAt)}</span>
+          <span className="text-muted-foreground">{formatTimestamp(notification.createdAt)}</span>
         </div>
         <div className="mt-2 text-sm font-medium">{notification.title}</div>
-        <div className="mt-1 whitespace-pre-wrap text-sm leading-5 text-stone-600">
+        <div className="mt-1 whitespace-pre-wrap text-sm leading-5 text-muted-foreground">
           {notification.body}
         </div>
       </div>
@@ -52,7 +52,7 @@ const NotificationCard = ({ notification }: { notification: Notification }): JSX
         type="button"
         aria-label="Dismiss notification"
         onClick={() => dismissNotification(notification.id)}
-        className="rounded-full px-2 py-1 text-xs text-stone-500 transition hover:bg-black/5 hover:text-stone-900"
+        className="rounded-full px-2 py-1 text-xs text-muted-foreground transition hover:bg-accent hover:text-foreground"
       >
         Dismiss
       </button>

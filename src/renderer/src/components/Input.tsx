@@ -10,7 +10,7 @@ const Input = forwardRef<HTMLInputElement, InputProps>(function Input(
     <input
       ref={ref}
       type={type}
-      className={`w-full rounded-full border border-white/60 bg-white/70 px-5 py-3 text-sm text-stone-800 shadow-[0_10px_30px_rgba(15,23,42,0.06)] outline-none backdrop-blur-xl transition placeholder:text-stone-400 focus:border-white focus:bg-white focus:ring-0 disabled:cursor-not-allowed disabled:opacity-50 ${className}`.trim()}
+      className={`w-full rounded-full border border-border bg-card px-5 py-3 text-sm text-foreground shadow-[0_10px_30px_rgba(0,0,0,0.18)] outline-none backdrop-blur-xl transition placeholder:text-muted-foreground focus:border-ring focus:bg-card focus:ring-0 disabled:cursor-not-allowed disabled:opacity-50 ${className}`.trim()}
       {...props}
     />
   )

@@ -1,16 +1,78 @@
-import { app, BrowserWindow, ipcMain } from 'electron'
+import { app, BrowserWindow, ipcMain, Notification } from 'electron'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import { SocketService } from './services/SocketService'
 import { createMainWindow } from './windows/createMainWindow'
 import { SERVER_URL } from '../shared/config'
+import type { MessageAttachment } from '../shared/chat'
 import type { WSEnvelope } from '../shared/ws'
 
 const socketService = new SocketService((attempt) => Math.min(1_000 * 2 ** (attempt - 1), 10_000))
+
+type UploadAttachmentFile = {
+  name: string
+  type: string
+  bytes: ArrayBuffer
+}
+
+type UploadAttachmentsPayload = {
+  chatId: string
+  files: UploadAttachmentFile[]
+}
+
+const getUploadErrorMessage = async (response: Response): Promise<string> => {
+  try {
+    const payload = (await response.json()) as { detail?: string }
+    if (typeof payload.detail === 'string' && payload.detail.trim()) {
+      return payload.detail
+    }
+  } catch {
+    // Ignore JSON parsing errors and fall back to the response status text.
+  }
+
+  return response.statusText || 'Attachment upload failed.'
+}
 
 // This method will be called when Electron has finished
 // initialization and is ready to create browser windows.
 // Some APIs can only be used after this event occurs.
 app.whenReady().then(() => {
+  let mainWindow: BrowserWindow | null = null
+
+  const showNativeNotification = (title: string, body: string): void => {
+    if (!Notification.isSupported()) {
+      return
+    }
+
+    const nativeNotification = new Notification({
+      title,
+      body
+    })
+
+    nativeNotification.on('click', () => {
+      if (mainWindow?.isDestroyed()) {
+        mainWindow = null
+      }
+
+      if (!mainWindow) {
+        mainWindow = createMainWindow()
+        return
+      }
+
+      if (mainWindow.isMinimized()) {
+        mainWindow.restore()
+      }
+
+      if (!mainWindow.isVisible()) {
+        mainWindow.show()
+      }
+
+      app.focus({ steal: true })
+      mainWindow.focus()
+    })
+
+    nativeNotification.show()
+  }
+
   // Set app user model id for windows
   electronApp.setAppUserModelId('com.electron')
 
@@ -35,6 +97,33 @@ app.whenReady().then(() => {
     socketService.send(envelope)
     console.log(`[renderer] Sent socket message: ${envelope.type}`)
   })
+
+  ipcMain.handle(
+    'renderer:upload-attachments',
+    async (_event, payload: UploadAttachmentsPayload): Promise<MessageAttachment[]> => {
+      const formData = new FormData()
+      formData.append('chatId', payload.chatId)
+
+      for (const file of payload.files) {
+        const blob = new Blob([new Uint8Array(file.bytes)], {
+          type: file.type || 'application/octet-stream'
+        })
+        formData.append('files', blob, file.name)
+      }
+
+      const response = await fetch(`${SERVER_URL}/attachments`, {
+        method: 'POST',
+        body: formData
+      })
+
+      if (!response.ok) {
+        throw new Error(await getUploadErrorMessage(response))
+      }
+
+      const responsePayload = (await response.json()) as { attachments?: MessageAttachment[] }
+      return Array.isArray(responsePayload.attachments) ? responsePayload.attachments : []
+    }
+  )
 
   ipcMain.on(
     'renderer:log',
@@ -63,6 +152,11 @@ app.whenReady().then(() => {
 
   socketService.onMessage((message) => {
     console.log(`[socket] event -> ${message.type}`, message)
+
+    if (message.type === 'notification.created') {
+      showNativeNotification(message.data.title, message.data.body)
+    }
+
     for (const window of BrowserWindow.getAllWindows()) {
       window.webContents.send('main:socket-event', message)
     }
@@ -79,12 +173,14 @@ app.whenReady().then(() => {
   })
 
   socketService.connect(SERVER_URL + '/ws')
-  const mainWindow = createMainWindow()
+  mainWindow = createMainWindow()
 
   app.on('activate', function () {
     // On macOS it's common to re-create a window in the app when the
     // dock icon is clicked and there are no other windows open.
-    if (BrowserWindow.getAllWindows().length === 0) createMainWindow()
+    if (BrowserWindow.getAllWindows().length === 0) {
+      mainWindow = createMainWindow()
+    }
   })
 })
 
