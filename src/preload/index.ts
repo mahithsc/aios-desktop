@@ -1,16 +1,27 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import { electronAPI } from '@electron-toolkit/preload'
+import type { MessageAttachment } from '../shared/chat'
 import type { WSEnvelope } from '../shared/ws'
+
+type UploadAttachmentFile = {
+  name: string
+  type: string
+  bytes: ArrayBuffer
+}
 
 // Custom APIs for renderer
 const api = {
-  sendSocketMessage: (message: WSEnvelope) => ipcRenderer.send('renderer:send-socket-message', message),
-  setIgnoreMouseEvents: (ignore: boolean) => ipcRenderer.send('overlay:set-ignore-mouse-events', ignore),
-  logToConsole: (
-    level: 'debug' | 'info' | 'warn' | 'error',
-    message: string,
-    details?: unknown
-  ) => ipcRenderer.send('renderer:log', { level, message, details }),
+  sendSocketMessage: (message: WSEnvelope) =>
+    ipcRenderer.send('renderer:send-socket-message', message),
+  uploadAttachments: (
+    chatId: string,
+    files: UploadAttachmentFile[]
+  ): Promise<MessageAttachment[]> =>
+    ipcRenderer.invoke('renderer:upload-attachments', { chatId, files }),
+  setIgnoreMouseEvents: (ignore: boolean) =>
+    ipcRenderer.send('overlay:set-ignore-mouse-events', ignore),
+  logToConsole: (level: 'debug' | 'info' | 'warn' | 'error', message: string, details?: unknown) =>
+    ipcRenderer.send('renderer:log', { level, message, details }),
   onSocketEvent: (listener: (event: WSEnvelope) => void) => {
     const subscription = (_event: Electron.IpcRendererEvent, socketEvent: WSEnvelope): void => {
       listener(socketEvent)

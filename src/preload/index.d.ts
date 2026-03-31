@@ -1,8 +1,16 @@
 import { ElectronAPI } from '@electron-toolkit/preload'
+import type { MessageAttachment } from '../shared/chat'
 import type { WSEnvelope } from '../shared/ws'
+
+interface UploadAttachmentFile {
+  name: string
+  type: string
+  bytes: ArrayBuffer
+}
 
 interface AppAPI {
   sendSocketMessage: (message: WSEnvelope) => void
+  uploadAttachments: (chatId: string, files: UploadAttachmentFile[]) => Promise<MessageAttachment[]>
   setIgnoreMouseEvents: (ignore: boolean) => void
   onSocketEvent: (listener: (event: WSEnvelope) => void) => () => void
   logToConsole: (

@@ -52,8 +52,8 @@ const DesktopWidget = (): JSX.Element => {
   return (
     <div className="w-md max-w-[calc(100vw-2rem)]">
       <ClickableDiv
-        className={`overflow-hidden rounded-[24px] border backdrop-blur-xl ${
-          darkMode ? 'border-white/10 bg-[rgb(40,40,40)]/80' : 'border-stone-200 bg-white/95'
+        className={`overflow-hidden rounded-[24px] border border-border backdrop-blur-xl ${
+          darkMode ? 'bg-card/90' : 'bg-card/95'
         }`}
         style={{ width: '100%' }}
       >
@@ -73,8 +73,8 @@ const DesktopWidget = (): JSX.Element => {
         <div
           className={`flex w-full flex-col gap-2 px-3 py-2.5 ${
             chat.messages.length > 0
-              ? 'rounded-t-[24px] border-t border-white/10 bg-black/90'
-              : 'bg-black/90'
+              ? 'rounded-t-[24px] border-t border-border bg-background/95'
+              : 'bg-background/95'
           }`}
           style={dragRegionStyle}
         >
@@ -96,7 +96,7 @@ const DesktopWidget = (): JSX.Element => {
               type="button"
               className={`inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full border text-sm font-medium leading-none ${
                 darkMode
-                  ? 'border-white/10 bg-white/5 text-white hover:bg-white/10'
+                  ? 'border-border bg-secondary text-secondary-foreground hover:bg-accent'
                   : 'border-stone-300 bg-stone-100 text-stone-900 hover:bg-stone-200'
               }`}
             >
@@ -109,7 +109,7 @@ const DesktopWidget = (): JSX.Element => {
                   onClick={handleNewChat}
                   className={`inline-flex h-7 shrink-0 items-center justify-center rounded-full border px-3 text-sm font-medium leading-none ${
                     darkMode
-                      ? 'border-white/10 bg-white/5 text-white hover:bg-white/10'
+                      ? 'border-border bg-secondary text-secondary-foreground hover:bg-accent'
                       : 'border-stone-300 bg-stone-100 text-stone-900 hover:bg-stone-200'
                   }`}
                 >
@@ -123,7 +123,7 @@ const DesktopWidget = (): JSX.Element => {
                 transition={{ duration: 0.1 }}
                 className={`inline-flex h-7 shrink-0 items-center justify-center rounded-full border px-3 text-sm font-medium leading-none ${
                   darkMode
-                    ? 'border-white/10 bg-white text-black'
+                    ? 'border-border bg-primary text-primary-foreground'
                     : 'border-stone-900 bg-stone-900 text-white'
                 }`}
               >
