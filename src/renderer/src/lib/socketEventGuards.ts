@@ -1,5 +1,6 @@
 import type { Chat, ChatMetadata, LLMEvent } from 'src/shared/chat'
 import type { CanvasArtifact, CanvasToolResult, ChatCanvasArtifact } from 'src/shared/canvas'
+import type { CronUpcomingItem, CronUpcomingListResponse } from 'src/shared/cron'
 import type { Notification, NotificationListResponse } from 'src/shared/notification'
 import type { Run, RunEvent } from 'src/shared/run'
 
@@ -32,6 +33,20 @@ export const isNotification = (value: unknown): value is Notification =>
 
 export const isNotificationListResponse = (value: unknown): value is NotificationListResponse =>
   typeof value === 'object' && value !== null && 'notifications' in value
+
+export const isCronUpcomingItem = (value: unknown): value is CronUpcomingItem =>
+  typeof value === 'object' &&
+  value !== null &&
+  'id' in value &&
+  'name' in value &&
+  'nextRunAt' in value
+
+export const isCronUpcomingListResponse = (value: unknown): value is CronUpcomingListResponse =>
+  typeof value === 'object' &&
+  value !== null &&
+  'crons' in value &&
+  Array.isArray((value as { crons?: unknown[] }).crons) &&
+  (value as { crons: unknown[] }).crons.every(isCronUpcomingItem)
 
 const isCanvasArtifactKind = (value: unknown): value is CanvasArtifact['kind'] =>
   value === 'image' || value === 'video' || value === 'file'

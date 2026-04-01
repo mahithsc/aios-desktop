@@ -1,4 +1,5 @@
 import type { Chat, ChatMetadata, LLMEvent } from './chat'
+import type { CronUpcomingListResponse } from './cron'
 import type {
   Notification,
   NotificationDismissRequest,
@@ -16,6 +17,7 @@ export type WSEnvelopeTypes =
   | 'chat'
   | 'chat-history'
   | 'chat.submit'
+  | 'cron.upcoming.list'
   | 'notification.list'
   | 'notification.created'
   | 'notification.dismiss'
@@ -40,6 +42,11 @@ export interface ChatSubmitWSEnvelope {
     chat: Chat
     turnId: string
   }
+}
+
+export interface CronUpcomingListWSEnvelope {
+  type: 'cron.upcoming.list'
+  data: CronUpcomingListResponse | null
 }
 
 export interface NotificationListWSEnvelope {
@@ -81,6 +88,7 @@ export type WSEnvelope =
   | ChatWSEnvelope
   | ChatHistoryWSEnvelope
   | ChatSubmitWSEnvelope
+  | CronUpcomingListWSEnvelope
   | NotificationListWSEnvelope
   | NotificationCreatedWSEnvelope
   | NotificationDismissWSEnvelope

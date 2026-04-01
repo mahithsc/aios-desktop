@@ -4,10 +4,12 @@ import { AppWindow, FileCode2, ImageIcon, Video } from 'lucide-react'
 import { useMemo, type JSX, type KeyboardEvent } from 'react'
 import { useChatStore } from '../../store/useChatSessionStore'
 import { useCanvasStore } from '../../store/useCanvasStore'
+import { useCronStore } from '../../store/useCronStore'
 import { useInputStore } from '../../store/useInputStore'
 import { useNotificationStore } from '../../store/useNotificationStore'
 import ChatComposer from '../agents/components/ChatComposer'
 import NotificationCard from './components/NotificationCard'
+import UpcomingCronCard from './components/UpcomingCronCard'
 import { useChatAttachments } from '../../lib/chatAttachments'
 import { useFileDropTarget } from '../../lib/fileDropTarget'
 
@@ -168,6 +170,7 @@ const Home = ({ onOpenAgents }: HomeProps): JSX.Element => {
   const chatHistory = useChatStore((state) => state.chatHistory)
   const createAssistantMessageStub = useChatStore((state) => state.createAssistantMessageStub)
   const canvasArtifactsByChatId = useCanvasStore((state) => state.artifactsByChatId)
+  const upcomingCrons = useCronStore((state) => state.upcomingCrons)
   const notifications = useNotificationStore((state) => state.notifications)
   const dismissNotification = useNotificationStore((state) => state.dismissNotification)
   const { attachments, clearAttachments, isUploading, removeAttachment, uploadError, uploadFiles } =
@@ -188,6 +191,7 @@ const Home = ({ onOpenAgents }: HomeProps): JSX.Element => {
     () => new Map(chatHistory.map((entry) => [entry.id, entry])),
     [chatHistory]
   )
+  const visibleUpcomingCrons = useMemo(() => upcomingCrons.slice(0, 6), [upcomingCrons])
 
   const handleSubmit = (): void => {
     const nextValue = value.trim()
@@ -298,6 +302,25 @@ const Home = ({ onOpenAgents }: HomeProps): JSX.Element => {
           ) : (
             <div className="rounded-2xl border border-dashed border-border bg-card px-4 py-6 text-sm text-muted-foreground">
               Applications you build in chat will appear here so you can jump back into them.
+            </div>
+          )}
+        </section>
+
+        <section className="w-full max-w-3xl">
+          <div className="mb-3 flex items-center justify-between">
+            <h2 className="text-sm font-medium text-foreground">Upcoming Crons</h2>
+            <span className="text-xs text-muted-foreground">{upcomingCrons.length} active</span>
+          </div>
+
+          {visibleUpcomingCrons.length > 0 ? (
+            <div className="grid gap-3 sm:grid-cols-2">
+              {visibleUpcomingCrons.map((cron) => (
+                <UpcomingCronCard key={cron.id} cron={cron} />
+              ))}
+            </div>
+          ) : (
+            <div className="rounded-2xl border border-dashed border-border bg-card px-4 py-6 text-sm text-muted-foreground">
+              No upcoming cron jobs.
             </div>
           )}
         </section>

@@ -3,6 +3,7 @@ import {
   getChatCanvasArtifact,
   isChat,
   isChatHistory,
+  isCronUpcomingListResponse,
   isLLMEvent,
   isNotification,
   isNotificationListResponse,
@@ -12,7 +13,10 @@ import {
 import { runEventToChatEvent } from '../lib/runEventToChatEvent'
 import { useCanvasStore } from '../store/useCanvasStore'
 import { useChatStore } from '../store/useChatSessionStore'
+import { useCronStore } from '../store/useCronStore'
 import { useNotificationStore } from '../store/useNotificationStore'
+
+const CRON_REFRESH_INTERVAL_MS = 30_000
 
 type SocketSyncProviderProps = {
   children: ReactNode
@@ -24,6 +28,7 @@ const SocketSyncProvider = ({ children }: SocketSyncProviderProps): ReactNode =>
   const setChat = useChatStore((state) => state.setChat)
   const setChatHistory = useChatStore((state) => state.setChatHistory)
   const setCanvasArtifact = useCanvasStore((state) => state.setCanvasArtifact)
+  const setUpcomingCrons = useCronStore((state) => state.setUpcomingCrons)
   const addNotification = useNotificationStore((state) => state.addNotification)
   const dismissNotification = useNotificationStore((state) => state.dismissNotification)
   const setNotifications = useNotificationStore((state) => state.setNotifications)
@@ -37,6 +42,23 @@ const SocketSyncProvider = ({ children }: SocketSyncProviderProps): ReactNode =>
       type: 'notification.list',
       data: null
     })
+    window.api.sendSocketMessage({
+      type: 'cron.upcoming.list',
+      data: null
+    })
+  }, [])
+
+  useEffect(() => {
+    const intervalId = window.setInterval(() => {
+      window.api.sendSocketMessage({
+        type: 'cron.upcoming.list',
+        data: null
+      })
+    }, CRON_REFRESH_INTERVAL_MS)
+
+    return () => {
+      window.clearInterval(intervalId)
+    }
   }, [])
 
   useEffect(() => {
@@ -62,6 +84,15 @@ const SocketSyncProvider = ({ children }: SocketSyncProviderProps): ReactNode =>
           setNotifications(socketEvent.data.notifications)
         } else {
           setNotifications([])
+        }
+        return
+      }
+
+      if (socketEvent.type === 'cron.upcoming.list') {
+        if (isCronUpcomingListResponse(socketEvent.data)) {
+          setUpcomingCrons(socketEvent.data.crons)
+        } else {
+          setUpcomingCrons([])
         }
         return
       }
@@ -170,6 +201,7 @@ const SocketSyncProvider = ({ children }: SocketSyncProviderProps): ReactNode =>
     setCanvasArtifact,
     setChat,
     setChatHistory,
+    setUpcomingCrons,
     setNotifications
   ])
 
