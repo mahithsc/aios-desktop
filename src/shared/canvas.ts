@@ -1,4 +1,4 @@
-export type CanvasArtifactKind = 'image' | 'video' | 'file'
+export type CanvasArtifactKind = 'image' | 'video' | 'file' | 'html'
 
 export interface CanvasArtifact {
   version: 1

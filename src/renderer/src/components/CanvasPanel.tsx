@@ -1,9 +1,39 @@
-import type { CanvasArtifact, ChatCanvasArtifact } from 'src/shared/canvas'
+import type { CanvasArtifact, ChatCanvasArtifact } from '@shared/canvas'
 import { useEffect, type JSX } from 'react'
+import { SERVER_URL } from '@shared/config'
 import Markdown from './Markdown'
 
 type CanvasPanelProps = {
   artifact?: ChatCanvasArtifact
+  width?: number
+}
+
+const deriveServedUrl = (artifact: CanvasArtifact): string | null => {
+  const filePath = artifact.filePath?.trim()
+  if (!filePath) {
+    return null
+  }
+
+  const normalizedPath = filePath.replace(/\\/g, '/')
+  const sessionArtifactsMatch = normalizedPath.match(/\/workspace\/session\/([^/]+)\/artifacts\/(.+)$/)
+  if (sessionArtifactsMatch) {
+    const [, chatId, artifactRelativePath] = sessionArtifactsMatch
+    return `${SERVER_URL}/session-artifacts/${encodeURIComponent(chatId)}/${artifactRelativePath
+      .split('/')
+      .map((part) => encodeURIComponent(part))
+      .join('/')}`
+  }
+
+  const appsIndex = normalizedPath.indexOf('/workspace/apps/')
+  if (appsIndex >= 0) {
+    const appRelativePath = normalizedPath.slice(appsIndex + '/workspace/apps/'.length)
+    return `${SERVER_URL}/apps/${appRelativePath
+      .split('/')
+      .map((part) => encodeURIComponent(part))
+      .join('/')}`
+  }
+
+  return null
 }
 
 const formatBytes = (sizeBytes?: number): string | null => {
@@ -32,6 +62,11 @@ const toCanvasSource = (artifact: CanvasArtifact): string | null => {
     return artifact.url
   }
 
+  const servedUrl = deriveServedUrl(artifact)
+  if (servedUrl) {
+    return servedUrl
+  }
+
   if (!artifact.filePath) {
     return null
   }
@@ -54,6 +89,21 @@ const isMarkdownArtifact = (artifact: CanvasArtifact): boolean => {
   )
 }
 
+const isHtmlArtifact = (artifact: CanvasArtifact): boolean => {
+  const mimeType = artifact.mimeType?.toLowerCase()
+  const name = artifact.name?.toLowerCase()
+  const filePath = artifact.filePath?.toLowerCase()
+  const url = artifact.url?.toLowerCase()
+
+  return (
+    artifact.kind === 'html' ||
+    mimeType === 'text/html' ||
+    name?.endsWith('.html') === true ||
+    filePath?.endsWith('.html') === true ||
+    url?.endsWith('.html') === true
+  )
+}
+
 const isTextArtifact = (artifact: CanvasArtifact): boolean =>
   artifact.mimeType?.toLowerCase().startsWith('text/') === true
 
@@ -67,6 +117,16 @@ const ArtifactMetadata = ({ artifact }: { artifact: CanvasArtifact }): JSX.Eleme
     <div className="space-y-1 text-xs text-stone-500">
       {artifact.mimeType ? <div>{artifact.mimeType}</div> : null}
       {size ? <div>{size}</div> : null}
+      {artifact.url ? (
+        <a
+          href={artifact.url}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="block break-all rounded-md bg-stone-100 px-2 py-1 font-mono text-[11px] text-stone-600 underline"
+        >
+          {artifact.url}
+        </a>
+      ) : null}
       {artifact.filePath ? (
         <div className="break-all rounded-md bg-stone-100 px-2 py-1 font-mono text-[11px] text-stone-600">
           {artifact.filePath}
@@ -111,6 +171,18 @@ const UnsupportedArtifact = ({ artifact }: { artifact: CanvasArtifact }): JSX.El
 const CanvasArtifactView = ({ artifact }: { artifact: CanvasArtifact }): JSX.Element => {
   const source = toCanvasSource(artifact)
   const hasTextPreview = Boolean(artifact.textPreview?.trim())
+
+  if (isHtmlArtifact(artifact) && source) {
+    return (
+      <div className="h-full w-full">
+        <iframe
+          src={source}
+          title={artifact.title || artifact.name || 'Canvas preview'}
+          className="h-full w-full border-0 bg-white"
+        />
+      </div>
+    )
+  }
 
   if (artifact.kind === 'image' && source) {
     return (
@@ -175,7 +247,7 @@ const CanvasArtifactView = ({ artifact }: { artifact: CanvasArtifact }): JSX.Ele
   return <UnsupportedArtifact artifact={artifact} />
 }
 
-const CanvasPanel = ({ artifact }: CanvasPanelProps): JSX.Element => {
+const CanvasPanel = ({ artifact, width = 480 }: CanvasPanelProps): JSX.Element => {
   useEffect(() => {
     console.debug('[canvas]', 'CanvasPanel rendered with artifact.', {
       artifact
@@ -184,6 +256,17 @@ const CanvasPanel = ({ artifact }: CanvasPanelProps): JSX.Element => {
       artifact
     })
   }, [artifact])
+
+  if (artifact && isHtmlArtifact(artifact.artifact)) {
+    return (
+      <aside
+        className="min-w-0 shrink-0 overflow-hidden border-l border-stone-200 bg-white"
+        style={{ width }}
+      >
+        <div className="h-full w-full">{artifact ? <CanvasArtifactView artifact={artifact.artifact} /> : null}</div>
+      </aside>
+    )
+  }
 
   return (
     <aside className="flex h-full w-80 shrink-0 flex-col border-l border-stone-200 bg-white">

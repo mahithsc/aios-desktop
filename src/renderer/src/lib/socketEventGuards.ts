@@ -49,7 +49,7 @@ export const isCronUpcomingListResponse = (value: unknown): value is CronUpcomin
   (value as { crons: unknown[] }).crons.every(isCronUpcomingItem)
 
 const isCanvasArtifactKind = (value: unknown): value is CanvasArtifact['kind'] =>
-  value === 'image' || value === 'video' || value === 'file'
+  value === 'image' || value === 'video' || value === 'file' || value === 'html'
 
 export const isCanvasArtifact = (value: unknown): value is CanvasArtifact => {
   if (typeof value !== 'object' || value === null) {

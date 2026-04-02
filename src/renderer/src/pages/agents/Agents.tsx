@@ -1,8 +1,17 @@
 import type { ChatMetadata } from 'src/shared/chat'
-import { useEffect, useMemo, type JSX, type KeyboardEvent } from 'react'
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type JSX,
+  type KeyboardEvent,
+  type MouseEvent as ReactMouseEvent
+} from 'react'
 import { useChatStore } from '../../store/useChatSessionStore'
 import { useCanvasStore } from '../../store/useCanvasStore'
 import { useInputStore } from '../../store/useInputStore'
+import CanvasPanel from '../../components/CanvasPanel'
 import ChatMessages from '../../components/ChatMessages'
 import ChatComposer from './components/ChatComposer'
 import { useChatAttachments } from '../../lib/chatAttachments'
@@ -75,6 +84,7 @@ const ChatHistoryItem = ({
 )
 
 const Agents = (): JSX.Element => {
+  const contentRef = useRef<HTMLElement | null>(null)
   const value = useInputStore((state) => state.value)
   const setValue = useInputStore((state) => state.setValue)
   const clearValue = useInputStore((state) => state.clearValue)
@@ -95,6 +105,8 @@ const Agents = (): JSX.Element => {
     () => [...chatHistory].sort((a, b) => b.updatedAt - a.updatedAt),
     [chatHistory]
   )
+  const [canvasWidth, setCanvasWidth] = useState(480)
+  const [isResizingCanvas, setIsResizingCanvas] = useState(false)
   const activeRunId = useMemo(() => {
     const activeMessage = [...chat.messages]
       .reverse()
@@ -177,6 +189,36 @@ const Agents = (): JSX.Element => {
     })
   }
 
+  const resizeCanvas = (clientX: number): void => {
+    const bounds = contentRef.current?.getBoundingClientRect()
+    if (!bounds) {
+      return
+    }
+
+    const nextWidth = bounds.right - clientX
+    const minWidth = 320
+    const maxWidth = Math.max(400, bounds.width - 320)
+    setCanvasWidth(Math.min(Math.max(nextWidth, minWidth), maxWidth))
+  }
+
+  const handleResizeStart = (event: ReactMouseEvent<HTMLDivElement>): void => {
+    event.preventDefault()
+    setIsResizingCanvas(true)
+    resizeCanvas(event.clientX)
+  }
+
+  const handleResizeMove = (event: ReactMouseEvent<HTMLDivElement>): void => {
+    if (!isResizingCanvas) {
+      return
+    }
+
+    resizeCanvas(event.clientX)
+  }
+
+  const handleResizeEnd = (): void => {
+    setIsResizingCanvas(false)
+  }
+
   return (
     <div
       className="relative flex h-full min-h-0 w-full overflow-hidden bg-background"
@@ -187,6 +229,14 @@ const Agents = (): JSX.Element => {
         void onDrop(event)
       }}
     >
+      {isResizingCanvas ? (
+        <div
+          className="absolute inset-0 z-40 cursor-col-resize"
+          onMouseMove={handleResizeMove}
+          onMouseUp={handleResizeEnd}
+          onMouseLeave={handleResizeEnd}
+        />
+      ) : null}
       {isDragActive ? (
         <div className="pointer-events-none absolute inset-0 z-30 flex items-center justify-center bg-background/85 backdrop-blur-sm">
           <div className="rounded-2xl border border-dashed border-primary/60 bg-card px-6 py-4 text-sm font-medium text-foreground shadow-lg">
@@ -228,7 +278,7 @@ const Agents = (): JSX.Element => {
         </div>
       </aside>
 
-      <section className="flex min-w-0 flex-1 overflow-hidden">
+      <section ref={contentRef} className="flex min-w-0 flex-1 overflow-hidden">
         <div className="relative flex min-w-0 flex-1 flex-col overflow-hidden">
           <div className="mx-auto w-full max-w-184 px-4 pb-3 sm:px-6">
             <div className="flex items-center justify-between gap-3">
@@ -280,7 +330,20 @@ const Agents = (): JSX.Element => {
           </div>
         </div>
 
-        {/* <CanvasPanel artifact={canvasArtifact} /> */}
+        {canvasArtifact ? (
+          <>
+            <div
+              role="separator"
+              aria-orientation="vertical"
+              aria-label="Resize canvas"
+              onMouseDown={handleResizeStart}
+              className="group relative z-10 w-2 shrink-0 cursor-col-resize bg-transparent"
+            >
+              <div className="absolute inset-y-0 left-1/2 w-px -translate-x-1/2 bg-border transition group-hover:bg-foreground/40" />
+            </div>
+            <CanvasPanel artifact={canvasArtifact} width={canvasWidth} />
+          </>
+        ) : null}
       </section>
     </div>
   )
