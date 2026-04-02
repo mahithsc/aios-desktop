@@ -1,8 +1,8 @@
 export type UnixMs = number
 
-export type ChatStatus = 'idle' | 'streaming' | 'error'
+export type ChatStatus = 'idle' | 'streaming' | 'error' | 'cancelled'
 
-export type MessageStatus = 'pending' | 'streaming' | 'complete' | 'error'
+export type MessageStatus = 'pending' | 'streaming' | 'complete' | 'error' | 'cancelled'
 
 export type AttachmentKind = 'image' | 'file' | 'audio'
 
@@ -93,6 +93,11 @@ export interface StreamErrorEvent extends BaseLLMEvent {
   error: string
 }
 
+export interface StreamCancelledEvent extends BaseLLMEvent {
+  type: 'stream_cancelled'
+  reason: string
+}
+
 export type LLMEvent =
   | StreamStartEvent
   | TokenEvent
@@ -101,3 +106,4 @@ export type LLMEvent =
   | ToolCallErrorEvent
   | StreamEndEvent
   | StreamErrorEvent
+  | StreamCancelledEvent

@@ -68,6 +68,14 @@ export const runEventToChatEvent = (runEvent: RunEvent): LLMEvent | null => {
     }
   }
 
+  if (runEvent.event.type === 'cancelled') {
+    return {
+      ...baseEvent,
+      type: 'stream_cancelled',
+      reason: typeof data?.reason === 'string' ? data.reason : 'Run stopped by user.'
+    }
+  }
+
   if (runEvent.event.type === 'completed') {
     return {
       ...baseEvent,

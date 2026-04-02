@@ -10,6 +10,7 @@ import type {
   Run,
   RunEvent,
   RunResumeRequest,
+  RunStopRequest,
   RunSnapshot
 } from './run'
 
@@ -23,6 +24,7 @@ export type WSEnvelopeTypes =
   | 'notification.dismiss'
   | 'run.accepted'
   | 'run.event'
+  | 'run.stop'
   | 'process.snapshot.list'
   | 'run.resume'
 
@@ -74,6 +76,11 @@ export interface RunEventWSEnvelope {
   data: RunEvent
 }
 
+export interface RunStopWSEnvelope {
+  type: 'run.stop'
+  data: RunStopRequest
+}
+
 export interface ProcessSnapshotListWSEnvelope {
   type: 'process.snapshot.list'
   data: ProcessSnapshotListRequest | RunSnapshot[] | null
@@ -94,5 +101,6 @@ export type WSEnvelope =
   | NotificationDismissWSEnvelope
   | RunAcceptedWSEnvelope
   | RunEventWSEnvelope
+  | RunStopWSEnvelope
   | ProcessSnapshotListWSEnvelope
   | RunResumeWSEnvelope

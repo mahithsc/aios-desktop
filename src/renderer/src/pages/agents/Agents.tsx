@@ -20,6 +20,7 @@ const getChatTitle = (chat: ChatMetadata): string => chat.title?.trim() || 'Unti
 
 const getStatusLabel = (status?: ChatMetadata['status']): string => {
   if (status === 'streaming') return 'Running'
+  if (status === 'cancelled') return 'Stopped'
   if (status === 'error') return 'Error'
   return 'Idle'
 }
@@ -31,6 +32,10 @@ const getStatusClassName = (status?: ChatMetadata['status']): string => {
 
   if (status === 'error') {
     return 'bg-red-500/15 text-red-200'
+  }
+
+  if (status === 'cancelled') {
+    return 'bg-amber-500/15 text-amber-200'
   }
 
   return 'bg-muted text-muted-foreground'
@@ -90,6 +95,19 @@ const Agents = (): JSX.Element => {
     () => [...chatHistory].sort((a, b) => b.updatedAt - a.updatedAt),
     [chatHistory]
   )
+  const activeRunId = useMemo(() => {
+    const activeMessage = [...chat.messages]
+      .reverse()
+      .find(
+        (message) =>
+          message.role === 'assistant' &&
+          (message.status === 'pending' || message.status === 'streaming') &&
+          !!message.runId
+      )
+
+    return activeMessage?.role === 'assistant' ? (activeMessage.runId ?? null) : null
+  }, [chat.messages])
+  const isRunning = chat.status === 'streaming'
 
   useEffect(() => {
     console.debug('[canvas]', 'Agents page selected canvas artifact changed.', {
@@ -105,6 +123,10 @@ const Agents = (): JSX.Element => {
   }, [canvasArtifact, chat.id])
 
   const handleSubmit = (): void => {
+    if (isRunning) {
+      return
+    }
+
     const nextValue = value.trim()
 
     if (!nextValue && attachments.length === 0) {
@@ -124,6 +146,19 @@ const Agents = (): JSX.Element => {
     })
     clearValue()
     clearAttachments()
+  }
+
+  const handleStop = (): void => {
+    if (!activeRunId) {
+      return
+    }
+
+    window.api.sendSocketMessage({
+      type: 'run.stop',
+      data: {
+        runId: activeRunId
+      }
+    })
   }
 
   const handleKeyDown = (event: KeyboardEvent<HTMLInputElement | HTMLTextAreaElement>): void => {
@@ -231,8 +266,11 @@ const Agents = (): JSX.Element => {
                 onChange={setValue}
                 onKeyDown={handleKeyDown}
                 onSubmit={handleSubmit}
+                onStop={handleStop}
                 attachments={attachments}
                 isUploading={isUploading}
+                isRunning={isRunning}
+                canStop={Boolean(activeRunId)}
                 onFilesSelected={uploadFiles}
                 onRemoveAttachment={removeAttachment}
                 uploadError={uploadError}

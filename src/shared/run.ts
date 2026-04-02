@@ -2,7 +2,7 @@ import type { UnixMs } from './chat'
 
 export type RunKind = 'chat' | 'cron' | 'heartbeat'
 
-export type RunStatus = 'queued' | 'running' | 'completed' | 'error'
+export type RunStatus = 'queued' | 'running' | 'completed' | 'error' | 'cancelled'
 
 export type RunEventType =
   | 'started'
@@ -12,6 +12,7 @@ export type RunEventType =
   | 'progress'
   | 'completed'
   | 'error'
+  | 'cancelled'
 
 export interface Run {
   id: string
@@ -55,4 +56,8 @@ export interface ProcessSnapshotListRequest {
 export interface RunResumeRequest {
   runId: string
   afterSequence: number
+}
+
+export interface RunStopRequest {
+  runId: string
 }

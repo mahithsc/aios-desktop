@@ -7,8 +7,11 @@ type ChatComposerProps = {
   onChange: (value: string) => void
   onKeyDown: KeyboardEventHandler<HTMLInputElement | HTMLTextAreaElement>
   onSubmit: () => void
+  onStop?: () => void
   attachments: MessageAttachment[]
   isUploading?: boolean
+  isRunning?: boolean
+  canStop?: boolean
   onFilesSelected: (files: File[]) => Promise<void> | void
   onRemoveAttachment: (attachmentId: string) => void
   uploadError?: string | null
@@ -44,7 +47,7 @@ const SendButton = ({
   </button>
 )
 
-const AttachmentButton = ({
+const StopButton = ({
   onClick,
   disabled
 }: {
@@ -55,10 +58,32 @@ const AttachmentButton = ({
     type="button"
     onClick={onClick}
     disabled={disabled}
+    className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-amber-500 text-black transition hover:bg-amber-400 disabled:cursor-not-allowed disabled:bg-muted disabled:text-muted-foreground"
+    aria-label="Stop run"
+  >
+    <svg viewBox="0 0 24 24" fill="currentColor" className="h-3.5 w-3.5" aria-hidden="true">
+      <rect x="6.5" y="6.5" width="11" height="11" rx="1.5" />
+    </svg>
+  </button>
+)
+
+const AttachmentButton = ({
+  onClick,
+  disabled,
+  label = 'Attach files'
+}: {
+  onClick: () => void
+  disabled?: boolean
+  label?: string
+}): JSX.Element => (
+  <button
+    type="button"
+    onClick={onClick}
+    disabled={disabled}
     className="inline-flex items-center gap-2 rounded-full border border-border bg-secondary px-3 py-1.5 text-xs font-medium text-secondary-foreground transition hover:bg-accent disabled:cursor-not-allowed disabled:text-muted-foreground"
   >
     <span className="text-sm leading-none">+</span>
-    <span>{disabled ? 'Uploading...' : 'Attach files'}</span>
+    <span>{label}</span>
   </button>
 )
 
@@ -90,8 +115,11 @@ const ChatComposer = ({
   onChange,
   onKeyDown,
   onSubmit,
+  onStop,
   attachments,
   isUploading = false,
+  isRunning = false,
+  canStop = false,
   onFilesSelected,
   onRemoveAttachment,
   uploadError = null,
@@ -109,7 +137,7 @@ const ChatComposer = ({
   }, [value])
 
   const handleAttachClick = (): void => {
-    if (isUploading) {
+    if (isUploading || isRunning) {
       return
     }
 
@@ -173,12 +201,26 @@ const ChatComposer = ({
         ) : null}
 
         <div className="flex items-center justify-between gap-3">
-          <AttachmentButton onClick={handleAttachClick} disabled={isUploading} />
+          <AttachmentButton
+            onClick={handleAttachClick}
+            disabled={isUploading || isRunning}
+            label={isUploading ? 'Uploading...' : isRunning ? 'Run in progress' : 'Attach files'}
+          />
           <div className="flex items-center gap-2 text-xs text-muted-foreground">
             <span>
-              {attachments.length > 0 ? `${attachments.length} attached` : 'No files attached'}
+              {isRunning
+                ? canStop
+                  ? 'Agent is running'
+                  : 'Starting run...'
+                : attachments.length > 0
+                  ? `${attachments.length} attached`
+                  : 'No files attached'}
             </span>
-            <SendButton onClick={onSubmit} disabled={isUploading} />
+            {isRunning ? (
+              <StopButton onClick={() => onStop?.()} disabled={!canStop} />
+            ) : (
+              <SendButton onClick={onSubmit} disabled={isUploading} />
+            )}
           </div>
         </div>
       </div>

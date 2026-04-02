@@ -3,6 +3,7 @@ import type {
   AssistantMessage,
   ChatMessage,
   MessageAttachment,
+  StreamCancelledEvent,
   StreamErrorEvent,
   TokenEvent,
   UserMessage
@@ -156,7 +157,8 @@ const getAssistantRenderItems = (message: AssistantMessage): AssistantRenderItem
 
 const getAssistantFallbackText = (message: AssistantMessage): string => {
   const streamError = message.events.some((event) => event.type === 'stream_error')
-  if (streamError) {
+  const streamCancelled = message.events.some((event) => event.type === 'stream_cancelled')
+  if (streamError || streamCancelled) {
     return ''
   }
 
@@ -178,6 +180,14 @@ const getAssistantStreamError = (message: AssistantMessage): string | null => {
     .find((event): event is StreamErrorEvent => event.type === 'stream_error')
 
   return streamError?.error ?? null
+}
+
+const getAssistantCancellationReason = (message: AssistantMessage): string | null => {
+  const streamCancelled = [...message.events]
+    .reverse()
+    .find((event): event is StreamCancelledEvent => event.type === 'stream_cancelled')
+
+  return streamCancelled?.reason ?? null
 }
 
 const getToolInputSummary = (input?: string): string | null => {
@@ -286,6 +296,7 @@ const AssistantMessageContent = ({
   const items = getAssistantRenderItems(message)
   const fallback = getAssistantFallbackText(message)
   const streamError = getAssistantStreamError(message)
+  const cancellationReason = getAssistantCancellationReason(message)
   const isActive = message.status === 'pending' || message.status === 'streaming'
   const stackClassName = compact ? 'space-y-2' : 'space-y-3'
 
@@ -303,6 +314,11 @@ const AssistantMessageContent = ({
         {streamError ? (
           <div className="whitespace-pre-wrap wrap-break-word rounded-xl border border-red-200 bg-red-50 px-2 py-1 text-sm leading-6 text-red-700">
             {streamError}
+          </div>
+        ) : null}
+        {cancellationReason ? (
+          <div className="whitespace-pre-wrap wrap-break-word rounded-xl border border-amber-200 bg-amber-50 px-2 py-1 text-sm leading-6 text-amber-800">
+            {cancellationReason}
           </div>
         ) : null}
       </div>
@@ -324,6 +340,11 @@ const AssistantMessageContent = ({
       {streamError ? (
         <div className="whitespace-pre-wrap wrap-break-word rounded-xl border border-red-200 bg-red-50 px-2 py-1 text-sm leading-6 text-red-700">
           {streamError}
+        </div>
+      ) : null}
+      {cancellationReason ? (
+        <div className="whitespace-pre-wrap wrap-break-word rounded-xl border border-amber-200 bg-amber-50 px-2 py-1 text-sm leading-6 text-amber-800">
+          {cancellationReason}
         </div>
       ) : null}
     </div>

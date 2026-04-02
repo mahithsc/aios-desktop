@@ -1,6 +1,6 @@
 import type { JSX } from 'react'
 import type { LucideIcon } from 'lucide-react'
-import { Check, ChevronRight, ChartCandlestick } from 'lucide-react'
+import { Check, ChevronRight, ChartCandlestick, Image } from 'lucide-react'
 
 type Plugin = {
   name: string
@@ -17,6 +17,12 @@ const plugins: Plugin[] = [
     icon: ChartCandlestick,
     accentClassName: 'bg-[#111827] text-white',
     installed: true
+  },
+  {
+    name: 'Image Gen Nano Banana',
+    description: 'Generate images with Nano Banana',
+    icon: Image,
+    accentClassName: 'bg-[#F59E0B] text-black'
   }
 ]
 

@@ -63,6 +63,8 @@ const createAssistantMessage = (runId: string, event: LLMEvent): AssistantMessag
   status:
     event.type === 'stream_error'
       ? 'error'
+      : event.type === 'stream_cancelled'
+        ? 'cancelled'
       : event.type === 'stream_end'
         ? 'complete'
         : 'streaming',
@@ -105,6 +107,10 @@ const upsertChatHistory = (chatHistory: ChatMetadata[], chat: Chat): ChatMetadat
 const getAssistantMessageStatus = (event: LLMEvent): AssistantMessage['status'] => {
   if (event.type === 'stream_error') {
     return 'error'
+  }
+
+  if (event.type === 'stream_cancelled') {
+    return 'cancelled'
   }
 
   if (event.type === 'stream_end') {
@@ -263,6 +269,8 @@ export const useChatStore = create<ChatStore>((set) => ({
           ? 'idle'
           : messageStatus === 'error'
             ? 'error'
+            : messageStatus === 'cancelled'
+              ? 'cancelled'
             : state.chat.status
 
       const nextChat = {
