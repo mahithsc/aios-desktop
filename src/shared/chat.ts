@@ -98,6 +98,26 @@ export interface StreamCancelledEvent extends BaseLLMEvent {
   reason: string
 }
 
+export type SubagentChildEventType =
+  | 'stream_start'
+  | 'tool_call_start'
+  | 'tool_call_end'
+  | 'tool_call_error'
+  | 'stream_end'
+  | 'stream_error'
+
+export interface SubagentToolEvent extends BaseLLMEvent {
+  type: 'subagent_tool_event'
+  parentToolCallId: string
+  childRunId: string
+  childEventType: SubagentChildEventType
+  toolCallId?: string | null
+  toolName?: string | null
+  input?: unknown
+  output?: unknown
+  error?: string | null
+}
+
 export type LLMEvent =
   | StreamStartEvent
   | TokenEvent
@@ -107,3 +127,4 @@ export type LLMEvent =
   | StreamEndEvent
   | StreamErrorEvent
   | StreamCancelledEvent
+  | SubagentToolEvent

@@ -83,5 +83,40 @@ export const runEventToChatEvent = (runEvent: RunEvent): LLMEvent | null => {
     }
   }
 
+  if (runEvent.event.type === 'subagent_tool_event') {
+    const parentToolCallId = data?.parentToolCallId
+    const childRunId = data?.childRunId
+    const childEventType = data?.childEventType
+    const toolCallId = data?.toolCallId
+    const toolName = data?.toolName
+    const error = data?.error
+
+    if (
+      typeof parentToolCallId !== 'string' ||
+      typeof childRunId !== 'string' ||
+      (childEventType !== 'stream_start' &&
+        childEventType !== 'tool_call_start' &&
+        childEventType !== 'tool_call_end' &&
+        childEventType !== 'tool_call_error' &&
+        childEventType !== 'stream_end' &&
+        childEventType !== 'stream_error')
+    ) {
+      return null
+    }
+
+    return {
+      ...baseEvent,
+      type: 'subagent_tool_event',
+      parentToolCallId,
+      childRunId,
+      childEventType,
+      toolCallId: typeof toolCallId === 'string' ? toolCallId : null,
+      toolName: typeof toolName === 'string' ? toolName : null,
+      input: data?.input,
+      output: data?.output,
+      error: typeof error === 'string' ? error : null
+    }
+  }
+
   return null
 }

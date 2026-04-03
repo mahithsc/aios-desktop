@@ -5,6 +5,7 @@ import type {
   MessageAttachment,
   StreamCancelledEvent,
   StreamErrorEvent,
+  SubagentToolEvent,
   TokenEvent,
   UserMessage
 } from 'src/shared/chat'
@@ -25,6 +26,26 @@ type AssistantRenderItem =
       input?: string
       output?: string
       error?: string
+      subagentEvents: SubagentToolEvent[]
+    }
+
+type SubagentRenderItem =
+  | {
+      id: string
+      type: 'status'
+      childRunId: string
+      status: 'running' | 'complete' | 'error'
+      error?: string | null
+    }
+  | {
+      id: string
+      type: 'tool'
+      childRunId: string
+      toolCallId: string
+      toolName: string
+      status: 'running' | 'complete' | 'error'
+      input?: string
+      error?: string | null
     }
 
 type ChatMessagesProps = {
@@ -99,6 +120,21 @@ const getAssistantRenderItems = (message: AssistantMessage): AssistantRenderItem
     if (event.type === 'tool_call_start') {
       flushText()
 
+      const existingIndex = toolIndexById.get(event.toolCallId)
+      if (existingIndex !== undefined) {
+        const existingItem = items[existingIndex]
+        if (existingItem?.type === 'tool') {
+          items[existingIndex] = {
+            ...existingItem,
+            id: event.id,
+            toolName: event.toolName,
+            status: 'running',
+            input: truncateToolPayload(formatToolPayload(event.input))
+          }
+        }
+        continue
+      }
+
       toolIndexById.set(event.toolCallId, items.length)
       items.push({
         id: event.id,
@@ -106,7 +142,8 @@ const getAssistantRenderItems = (message: AssistantMessage): AssistantRenderItem
         toolCallId: event.toolCallId,
         toolName: event.toolName,
         status: 'running',
-        input: truncateToolPayload(formatToolPayload(event.input))
+        input: truncateToolPayload(formatToolPayload(event.input)),
+        subagentEvents: []
       })
       continue
     }
@@ -145,7 +182,35 @@ const getAssistantRenderItems = (message: AssistantMessage): AssistantRenderItem
           event.type === 'tool_call_end'
             ? truncateToolPayload(formatToolPayload(event.output))
             : undefined,
-        error: event.type === 'tool_call_error' ? event.error : undefined
+        error: event.type === 'tool_call_error' ? event.error : undefined,
+        subagentEvents: []
+      })
+      continue
+    }
+
+    if (event.type === 'subagent_tool_event') {
+      flushText()
+
+      const existingIndex = toolIndexById.get(event.parentToolCallId)
+      if (existingIndex !== undefined) {
+        const existingItem = items[existingIndex]
+        if (existingItem?.type === 'tool') {
+          items[existingIndex] = {
+            ...existingItem,
+            subagentEvents: [...existingItem.subagentEvents, event]
+          }
+        }
+        continue
+      }
+
+      toolIndexById.set(event.parentToolCallId, items.length)
+      items.push({
+        id: `${message.id}-subagent-${event.parentToolCallId}`,
+        type: 'tool',
+        toolCallId: event.parentToolCallId,
+        toolName: 'subagent',
+        status: 'running',
+        subagentEvents: [event]
       })
     }
   }
@@ -197,6 +262,106 @@ const getToolInputSummary = (input?: string): string | null => {
   return `${oneLine.slice(0, TOOL_INPUT_TRUNCATE)}...`
 }
 
+const getShortRunLabel = (childRunId: string): string => `worker ${childRunId.slice(0, 8)}`
+
+const getSubagentRenderItems = (events: SubagentToolEvent[]): SubagentRenderItem[] => {
+  const items: SubagentRenderItem[] = []
+  const statusIndexByRunId = new Map<string, number>()
+  const toolIndexByRunAndToolId = new Map<string, number>()
+
+  for (const event of events) {
+    if (event.childEventType === 'stream_start') {
+      if (!statusIndexByRunId.has(event.childRunId)) {
+        statusIndexByRunId.set(event.childRunId, items.length)
+        items.push({
+          id: `${event.id}-status`,
+          type: 'status',
+          childRunId: event.childRunId,
+          status: 'running'
+        })
+      }
+      continue
+    }
+
+    if (event.childEventType === 'stream_end' || event.childEventType === 'stream_error') {
+      const existingIndex = statusIndexByRunId.get(event.childRunId)
+      if (existingIndex === undefined) {
+        statusIndexByRunId.set(event.childRunId, items.length)
+        items.push({
+          id: `${event.id}-status`,
+          type: 'status',
+          childRunId: event.childRunId,
+          status: event.childEventType === 'stream_error' ? 'error' : 'complete',
+          error: event.error
+        })
+        continue
+      }
+
+      const existingItem = items[existingIndex]
+      if (existingItem?.type === 'status') {
+        items[existingIndex] = {
+          ...existingItem,
+          status: event.childEventType === 'stream_error' ? 'error' : 'complete',
+          error: event.error ?? existingItem.error
+        }
+      }
+      continue
+    }
+
+    if (!event.toolCallId || !event.toolName) {
+      continue
+    }
+
+    const toolKey = `${event.childRunId}:${event.toolCallId}`
+    const existingIndex = toolIndexByRunAndToolId.get(toolKey)
+
+    if (event.childEventType === 'tool_call_start') {
+      if (existingIndex !== undefined) {
+        continue
+      }
+
+      toolIndexByRunAndToolId.set(toolKey, items.length)
+      items.push({
+        id: `${event.childRunId}:${event.toolCallId}`,
+        type: 'tool',
+        childRunId: event.childRunId,
+        toolCallId: event.toolCallId,
+        toolName: event.toolName,
+        status: 'running',
+        input: truncateToolPayload(formatToolPayload(event.input))
+      })
+      continue
+    }
+
+    if (existingIndex !== undefined) {
+      const existingItem = items[existingIndex]
+      if (existingItem?.type === 'tool') {
+        items[existingIndex] = {
+          ...existingItem,
+          toolName: event.toolName,
+          status: event.childEventType === 'tool_call_error' ? 'error' : 'complete',
+          error: event.childEventType === 'tool_call_error' ? event.error : existingItem.error
+        }
+      }
+      continue
+    }
+
+    toolIndexByRunAndToolId.set(toolKey, items.length)
+    items.push({
+      id: `${event.childRunId}:${event.toolCallId}`,
+      type: 'tool',
+      childRunId: event.childRunId,
+      toolCallId: event.toolCallId,
+      toolName: event.toolName,
+      status: event.childEventType === 'tool_call_error' ? 'error' : 'complete',
+      input: truncateToolPayload(formatToolPayload(event.input)),
+      error: event.childEventType === 'tool_call_error' ? event.error : null
+    })
+  }
+
+  return items
+}
+
 const ToolCallCard = ({
   item,
   darkMode
@@ -206,25 +371,87 @@ const ToolCallCard = ({
 }): JSX.Element => {
   const inputSummary = getToolInputSummary(item.input)
   const isRunning = item.status === 'running'
+  const subagentItems = item.toolName === 'subagent' ? getSubagentRenderItems(item.subagentEvents) : []
 
   return (
-    <div
-      className={`flex items-baseline gap-2 text-xs ${
-        darkMode ? 'text-white/60' : 'text-stone-500'
-      } ${isRunning ? 'animate-pulse' : ''}`}
-    >
-      <span className={`font-medium ${darkMode ? 'text-white/85' : 'text-stone-700'}`}>
-        {item.toolName}
-      </span>
-      {inputSummary ? (
-        <span className={`truncate font-mono ${darkMode ? 'text-white/45' : 'text-stone-400'}`}>
-          {inputSummary}
+    <div className="space-y-2">
+      <div
+        className={`flex items-baseline gap-2 text-xs ${
+          darkMode ? 'text-white/60' : 'text-stone-500'
+        } ${isRunning ? 'animate-pulse' : ''}`}
+      >
+        <span className={`font-medium ${darkMode ? 'text-white/85' : 'text-stone-700'}`}>
+          {item.toolName}
         </span>
+        {inputSummary ? (
+          <span className={`truncate font-mono ${darkMode ? 'text-white/45' : 'text-stone-400'}`}>
+            {inputSummary}
+          </span>
+        ) : null}
+        {item.status === 'complete' ? (
+          <span className={`text-[11px] ${darkMode ? 'text-white/90' : 'text-stone-900'}`}>OK</span>
+        ) : null}
+        {item.status === 'error' ? <span className="text-[11px] text-red-500">X</span> : null}
+      </div>
+
+      {subagentItems.length > 0 ? (
+        <div
+          className={`ml-3 space-y-1 border-l pl-3 ${
+            darkMode ? 'border-white/10' : 'border-stone-200'
+          }`}
+        >
+          {subagentItems.map((subagentItem) =>
+            subagentItem.type === 'status' ? (
+              <div
+                key={subagentItem.id}
+                className={`flex items-center gap-2 text-[11px] ${
+                  darkMode ? 'text-white/55' : 'text-stone-500'
+                } ${subagentItem.status === 'running' ? 'animate-pulse' : ''}`}
+              >
+                <span className={darkMode ? 'text-white/75' : 'text-stone-700'}>
+                  {getShortRunLabel(subagentItem.childRunId)}
+                </span>
+                <span>
+                  {subagentItem.status === 'running'
+                    ? 'running'
+                    : subagentItem.status === 'error'
+                      ? 'error'
+                      : 'done'}
+                </span>
+                {subagentItem.error ? (
+                  <span className="truncate text-red-400">{subagentItem.error}</span>
+                ) : null}
+              </div>
+            ) : (
+              <div
+                key={subagentItem.id}
+                className={`flex items-baseline gap-2 text-[11px] ${
+                  darkMode ? 'text-white/50' : 'text-stone-500'
+                } ${subagentItem.status === 'running' ? 'animate-pulse' : ''}`}
+              >
+                <span className={darkMode ? 'text-white/75' : 'text-stone-700'}>
+                  {subagentItem.toolName}
+                </span>
+                {getToolInputSummary(subagentItem.input) ? (
+                  <span
+                    className={`truncate font-mono ${
+                      darkMode ? 'text-white/40' : 'text-stone-400'
+                    }`}
+                  >
+                    {getToolInputSummary(subagentItem.input)}
+                  </span>
+                ) : null}
+                {subagentItem.status === 'complete' ? (
+                  <span className={darkMode ? 'text-white/80' : 'text-stone-800'}>OK</span>
+                ) : null}
+                {subagentItem.status === 'error' ? (
+                  <span className="text-red-500">X</span>
+                ) : null}
+              </div>
+            )
+          )}
+        </div>
       ) : null}
-      {item.status === 'complete' ? (
-        <span className={`text-[11px] ${darkMode ? 'text-white/90' : 'text-stone-900'}`}>OK</span>
-      ) : null}
-      {item.status === 'error' ? <span className="text-[11px] text-red-500">X</span> : null}
     </div>
   )
 }
