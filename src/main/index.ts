@@ -122,10 +122,13 @@ const applyChildWindowRegistration = (
     registration.options.alwaysOnTopLevel ?? 'normal'
   )
 
+  if (process.platform === 'darwin') {
+    childWindow.setWindowButtonVisibility(registration.windowKey !== WIDGET_WINDOW_KEY)
+  }
+
   if (registration.options.visibleOnAllWorkspaces !== undefined) {
     childWindow.setVisibleOnAllWorkspaces(registration.options.visibleOnAllWorkspaces, {
-      visibleOnFullScreen: registration.options.visibleOnFullScreen ?? false,
-      ...(process.platform === 'darwin' ? { skipTransformProcessType: true } : {})
+      visibleOnFullScreen: registration.options.visibleOnFullScreen ?? false
     })
   }
 
@@ -310,7 +313,6 @@ app.whenReady().then(() => {
 
     nativeNotification.show()
   }
-
   // Set app user model id for windows
   electronApp.setAppUserModelId('com.electron')
 

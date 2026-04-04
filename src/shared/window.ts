@@ -81,6 +81,7 @@ export const createWidgetWindowRegistration = (): ChildWindowRegistration => ({
     movable: true,
     hasShadow: true,
     acceptFirstMouse: true,
-    hiddenInMissionControl: true
+    hiddenInMissionControl: true,
+    type: 'panel'
   }
 })
