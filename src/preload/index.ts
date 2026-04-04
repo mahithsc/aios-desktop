@@ -13,13 +13,13 @@ type UploadAttachmentFile = {
 const api = {
   sendSocketMessage: (message: WSEnvelope) =>
     ipcRenderer.send('renderer:send-socket-message', message),
+  toggleWidgetWindow: () => ipcRenderer.send('renderer:toggle-widget-window'),
+  hideWidgetWindow: () => ipcRenderer.send('renderer:hide-widget-window'),
   uploadAttachments: (
     chatId: string,
     files: UploadAttachmentFile[]
   ): Promise<MessageAttachment[]> =>
     ipcRenderer.invoke('renderer:upload-attachments', { chatId, files }),
-  setIgnoreMouseEvents: (ignore: boolean) =>
-    ipcRenderer.send('overlay:set-ignore-mouse-events', ignore),
   logToConsole: (level: 'debug' | 'info' | 'warn' | 'error', message: string, details?: unknown) =>
     ipcRenderer.send('renderer:log', { level, message, details }),
   onSocketEvent: (listener: (event: WSEnvelope) => void) => {
@@ -31,6 +31,17 @@ const api = {
 
     return () => {
       ipcRenderer.removeListener('main:socket-event', subscription)
+    }
+  },
+  onWidgetVisibilityChanged: (listener: (visible: boolean) => void) => {
+    const subscription = (_event: Electron.IpcRendererEvent, visible: boolean): void => {
+      listener(visible)
+    }
+
+    ipcRenderer.on('main:widget-visibility-changed', subscription)
+
+    return () => {
+      ipcRenderer.removeListener('main:widget-visibility-changed', subscription)
     }
   }
 }

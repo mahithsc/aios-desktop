@@ -10,9 +10,11 @@ interface UploadAttachmentFile {
 
 interface AppAPI {
   sendSocketMessage: (message: WSEnvelope) => void
+  toggleWidgetWindow: () => void
+  hideWidgetWindow: () => void
   uploadAttachments: (chatId: string, files: UploadAttachmentFile[]) => Promise<MessageAttachment[]>
-  setIgnoreMouseEvents: (ignore: boolean) => void
   onSocketEvent: (listener: (event: WSEnvelope) => void) => () => void
+  onWidgetVisibilityChanged: (listener: (visible: boolean) => void) => () => void
   logToConsole: (
     level: 'debug' | 'info' | 'warn' | 'error',
     message: string,

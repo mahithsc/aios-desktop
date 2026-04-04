@@ -1,17 +1,16 @@
-import { useState, type JSX } from 'react'
+import type { JSX } from 'react'
+import { DESKTOP_WINDOW_MODE } from '@shared/window'
 import MainWindow from '@renderer/windows/main/MainWindow'
-import OverlayWindow from '@renderer/windows/overlay/OverlayWindow'
+import WidgetWindow from '@renderer/windows/widget/WidgetWindow'
 import SocketSyncProvider from './providers/SocketSyncProvider'
+import { getWindowMode } from './lib/windowMode'
 
 const App = (): JSX.Element => {
-  const [isOverlayOpen, setIsOverlayOpen] = useState(false)
+  const windowMode = getWindowMode()
 
   return (
     <SocketSyncProvider>
-      <>
-        <MainWindow isOverlayOpen={isOverlayOpen} onOpenOverlay={() => setIsOverlayOpen(true)} />
-        <OverlayWindow isOpen={isOverlayOpen} onClose={() => setIsOverlayOpen(false)} />
-      </>
+      {windowMode === DESKTOP_WINDOW_MODE.widget ? <WidgetWindow /> : <MainWindow />}
     </SocketSyncProvider>
   )
 }

@@ -117,11 +117,26 @@
 }
 
 @layer base {
+  html,
+  body,
+  #root {
+    min-height: 100%;
+  }
+
   * {
     @apply border-border outline-ring/50;
   }
 
   body {
     @apply bg-background text-foreground;
+  }
+
+  html[data-window-mode='widget'],
+  body[data-window-mode='widget'] {
+    background: transparent;
+  }
+
+  body[data-window-mode='widget'] {
+    overflow: hidden;
   }
 }

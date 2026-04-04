@@ -1,12 +1,15 @@
-import { app, BrowserWindow, ipcMain, Notification } from 'electron'
+import { app, BrowserWindow, globalShortcut, ipcMain, Notification } from 'electron'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import { SocketService } from './services/SocketService'
 import { createMainWindow } from './windows/createMainWindow'
+import { createWidgetWindow, getWidgetWindowBounds } from './windows/createWidgetWindow'
 import { SERVER_URL } from '../shared/config'
 import type { MessageAttachment } from '../shared/chat'
 import type { WSEnvelope } from '../shared/ws'
+import { WIDGET_SHORTCUT } from '../shared/window'
 
 const socketService = new SocketService((attempt) => Math.min(1_000 * 2 ** (attempt - 1), 10_000))
+let isQuitting = false
 
 type UploadAttachmentFile = {
   name: string
@@ -37,6 +40,110 @@ const getUploadErrorMessage = async (response: Response): Promise<string> => {
 // Some APIs can only be used after this event occurs.
 app.whenReady().then(() => {
   let mainWindow: BrowserWindow | null = null
+  let widgetWindow: BrowserWindow | null = null
+
+  const ensureMainWindow = (): BrowserWindow => {
+    if (mainWindow?.isDestroyed()) {
+      mainWindow = null
+    }
+
+    if (!mainWindow) {
+      mainWindow = createMainWindow()
+      mainWindow.on('closed', () => {
+        mainWindow = null
+      })
+    }
+
+    return mainWindow
+  }
+
+  const syncWidgetBounds = (): void => {
+    if (!widgetWindow || widgetWindow.isDestroyed()) {
+      return
+    }
+
+    widgetWindow.setBounds(getWidgetWindowBounds(), false)
+  }
+
+  const emitWidgetVisibilityChange = (visible: boolean): void => {
+    if (!widgetWindow || widgetWindow.isDestroyed()) {
+      return
+    }
+
+    widgetWindow.webContents.send('main:widget-visibility-changed', visible)
+  }
+
+  const hideWidgetWindow = (): void => {
+    if (!widgetWindow || widgetWindow.isDestroyed() || !widgetWindow.isVisible()) {
+      return
+    }
+
+    widgetWindow.hide()
+    emitWidgetVisibilityChange(false)
+  }
+
+  const showWidgetWindow = (): void => {
+    const targetWidgetWindow = ensureWidgetWindow()
+    syncWidgetBounds()
+
+    if (process.platform === 'darwin') {
+      targetWidgetWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true })
+      targetWidgetWindow.setAlwaysOnTop(true, 'floating')
+    } else {
+      targetWidgetWindow.setAlwaysOnTop(true)
+    }
+
+    targetWidgetWindow.show()
+    app.focus({ steal: true })
+    targetWidgetWindow.focus()
+    emitWidgetVisibilityChange(true)
+  }
+
+  const toggleWidgetWindow = (): void => {
+    if (widgetWindow && !widgetWindow.isDestroyed() && widgetWindow.isVisible()) {
+      hideWidgetWindow()
+      return
+    }
+
+    showWidgetWindow()
+  }
+
+  const ensureWidgetWindow = (): BrowserWindow => {
+    if (widgetWindow?.isDestroyed()) {
+      widgetWindow = null
+    }
+
+    if (!widgetWindow) {
+      widgetWindow = createWidgetWindow()
+      widgetWindow.on('close', (event) => {
+        if (isQuitting) {
+          return
+        }
+
+        event.preventDefault()
+        hideWidgetWindow()
+      })
+      widgetWindow.on('closed', () => {
+        widgetWindow = null
+      })
+    }
+
+    return widgetWindow
+  }
+
+  const registerWidgetShortcut = (): void => {
+    if (globalShortcut.isRegistered(WIDGET_SHORTCUT)) {
+      return
+    }
+
+    const didRegister = globalShortcut.register(WIDGET_SHORTCUT, () => {
+      toggleWidgetWindow()
+    })
+
+    if (!didRegister) {
+      console.warn(`[widget] Failed to register shortcut ${WIDGET_SHORTCUT}`)
+    }
+  }
 
   const showNativeNotification = (title: string, body: string): void => {
     if (!Notification.isSupported()) {
@@ -49,25 +156,18 @@ app.whenReady().then(() => {
     })
 
     nativeNotification.on('click', () => {
-      if (mainWindow?.isDestroyed()) {
-        mainWindow = null
+      const targetMainWindow = ensureMainWindow()
+
+      if (targetMainWindow.isMinimized()) {
+        targetMainWindow.restore()
       }
 
-      if (!mainWindow) {
-        mainWindow = createMainWindow()
-        return
-      }
-
-      if (mainWindow.isMinimized()) {
-        mainWindow.restore()
-      }
-
-      if (!mainWindow.isVisible()) {
-        mainWindow.show()
+      if (!targetMainWindow.isVisible()) {
+        targetMainWindow.show()
       }
 
       app.focus({ steal: true })
-      mainWindow.focus()
+      targetMainWindow.focus()
     })
 
     nativeNotification.show()
@@ -86,16 +186,17 @@ app.whenReady().then(() => {
   // IPC test
   ipcMain.on('ping', () => console.log('pong'))
 
-  ipcMain.on('overlay:set-ignore-mouse-events', (event, ignore: boolean) => {
-    const win = BrowserWindow.fromWebContents(event.sender)
-    if (!win || win === mainWindow) return
-    console.log('[overlay] set-ignore-mouse-events:', ignore)
-    win.setIgnoreMouseEvents(ignore, { forward: true })
-  })
-
   ipcMain.on('renderer:send-socket-message', (_event, envelope: WSEnvelope) => {
     socketService.send(envelope)
     console.log(`[renderer] Sent socket message: ${envelope.type}`)
+  })
+
+  ipcMain.on('renderer:toggle-widget-window', () => {
+    toggleWidgetWindow()
+  })
+
+  ipcMain.on('renderer:hide-widget-window', () => {
+    hideWidgetWindow()
   })
 
   ipcMain.handle(
@@ -173,14 +274,23 @@ app.whenReady().then(() => {
   })
 
   socketService.connect(SERVER_URL + '/ws')
-  mainWindow = createMainWindow()
+  ensureMainWindow()
+  ensureWidgetWindow()
+  registerWidgetShortcut()
 
   app.on('activate', function () {
-    // On macOS it's common to re-create a window in the app when the
-    // dock icon is clicked and there are no other windows open.
-    if (BrowserWindow.getAllWindows().length === 0) {
-      mainWindow = createMainWindow()
+    registerWidgetShortcut()
+    const targetMainWindow = ensureMainWindow()
+
+    if (targetMainWindow.isMinimized()) {
+      targetMainWindow.restore()
     }
+
+    if (!targetMainWindow.isVisible()) {
+      targetMainWindow.show()
+    }
+
+    targetMainWindow.focus()
   })
 })
 
@@ -194,6 +304,8 @@ app.on('window-all-closed', () => {
 })
 
 app.on('before-quit', () => {
+  globalShortcut.unregisterAll()
+  isQuitting = true
   socketService.destroy()
 })
 

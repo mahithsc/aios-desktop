@@ -6,11 +6,6 @@ import Plugins from '../../pages/plugins/Plugins'
 
 type TabId = 'home' | 'agents' | 'plugins'
 
-type MainWindowProps = {
-  isOverlayOpen: boolean
-  onOpenOverlay: () => void
-}
-
 const tabs: Array<{ id: TabId; label: string }> = [
   { id: 'home', label: 'Home' },
   { id: 'agents', label: 'Agents' },
@@ -20,19 +15,11 @@ const tabs: Array<{ id: TabId; label: string }> = [
 const dragRegionStyle = { WebkitAppRegion: 'drag' } as CSSProperties
 const noDragRegionStyle = { WebkitAppRegion: 'no-drag' } as CSSProperties
 
-const MainWindow = ({ isOverlayOpen, onOpenOverlay }: MainWindowProps): JSX.Element => {
+const MainWindow = (): JSX.Element => {
   const [activeTab, setActiveTab] = useState<TabId>('home')
 
   const content = useMemo(() => {
     if (activeTab === 'agents') {
-      if (isOverlayOpen) {
-        return (
-          <div className="flex h-full items-center justify-center rounded-[28px] border border-dashed border-border bg-card px-6 text-center text-sm text-muted-foreground">
-            Desktop widget is open in a separate window.
-          </div>
-        )
-      }
-
       return <Agents />
     }
 
@@ -41,7 +28,7 @@ const MainWindow = ({ isOverlayOpen, onOpenOverlay }: MainWindowProps): JSX.Elem
     }
 
     return <Home onOpenAgents={() => setActiveTab('agents')} />
-  }, [activeTab, isOverlayOpen])
+  }, [activeTab])
 
   return (
     <main className="flex h-screen flex-col overflow-hidden bg-background text-foreground">
@@ -77,20 +64,10 @@ const MainWindow = ({ isOverlayOpen, onOpenOverlay }: MainWindowProps): JSX.Elem
           </nav>
 
           <div
-            className="pointer-events-auto justify-self-end flex items-center gap-3"
+            className="pointer-events-auto justify-self-end rounded-full border border-border bg-card px-4 py-2 text-sm text-muted-foreground"
             style={noDragRegionStyle}
           >
-            <button
-              type="button"
-              onClick={onOpenOverlay}
-              disabled={isOverlayOpen}
-              className="rounded-full border border-border bg-card px-4 py-2 text-sm text-foreground transition hover:bg-accent disabled:cursor-not-allowed disabled:text-muted-foreground disabled:hover:bg-card"
-            >
-              {isOverlayOpen ? 'Desktop Widget Open' : 'Open Desktop Widget'}
-            </button>
-            <div className="rounded-full border border-border bg-card px-4 py-2 text-sm text-muted-foreground">
-              GPT 5.4
-            </div>
+            GPT 5.4
           </div>
         </header>
 

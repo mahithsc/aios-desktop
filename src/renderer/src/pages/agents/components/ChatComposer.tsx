@@ -17,6 +17,9 @@ type ChatComposerProps = {
   uploadError?: string | null
   fixed?: boolean
   placeholder?: string
+  autoFocus?: boolean
+  showAttachmentButton?: boolean
+  onFocusReady?: (focus: () => void) => void
 }
 
 const SendButton = ({
@@ -124,7 +127,10 @@ const ChatComposer = ({
   onRemoveAttachment,
   uploadError = null,
   fixed = true,
-  placeholder = 'Message an agent...'
+  placeholder = 'Message an agent...',
+  autoFocus = false,
+  showAttachmentButton = true,
+  onFocusReady
 }: ChatComposerProps): JSX.Element => {
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -135,6 +141,12 @@ const ChatComposer = ({
     el.style.height = 'auto'
     el.style.height = `${el.scrollHeight}px`
   }, [value])
+
+  useEffect(() => {
+    onFocusReady?.(() => {
+      textareaRef.current?.focus()
+    })
+  }, [onFocusReady])
 
   const handleAttachClick = (): void => {
     if (isUploading || isRunning) {
@@ -190,6 +202,7 @@ const ChatComposer = ({
           onChange={(event) => onChange(event.target.value)}
           onKeyDown={onKeyDown}
           placeholder={placeholder}
+          autoFocus={autoFocus}
           rows={1}
           className="max-h-64 w-full resize-none bg-transparent text-sm leading-6 text-foreground outline-none placeholder:text-muted-foreground"
         />
@@ -201,11 +214,15 @@ const ChatComposer = ({
         ) : null}
 
         <div className="flex items-center justify-between gap-3">
-          <AttachmentButton
-            onClick={handleAttachClick}
-            disabled={isUploading || isRunning}
-            label={isUploading ? 'Uploading...' : isRunning ? 'Run in progress' : 'Attach files'}
-          />
+          {showAttachmentButton ? (
+            <AttachmentButton
+              onClick={handleAttachClick}
+              disabled={isUploading || isRunning}
+              label={isUploading ? 'Uploading...' : isRunning ? 'Run in progress' : 'Attach files'}
+            />
+          ) : (
+            <div />
+          )}
           <div className="flex items-center gap-2 text-xs text-muted-foreground">
             <span>
               {isRunning
