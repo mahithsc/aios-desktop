@@ -1,3 +1,4 @@
+import type { Assistant } from 'src/shared/assistant'
 import type { Chat, ChatMetadata, LLMEvent } from 'src/shared/chat'
 import type { CanvasArtifact, CanvasToolResult, ChatCanvasArtifact } from 'src/shared/canvas'
 import type { CronUpcomingItem, CronUpcomingListResponse } from 'src/shared/cron'
@@ -11,6 +12,19 @@ const logCanvasDebug = (message: string, details?: Record<string, unknown>): voi
 
 export const isLLMEvent = (value: unknown): value is LLMEvent =>
   typeof value === 'object' && value !== null && 'type' in value && 'createdAt' in value
+
+export const isAssistant = (value: unknown): value is Assistant =>
+  typeof value === 'object' &&
+  value !== null &&
+  'id' in value &&
+  'chatId' in value &&
+  'title' in value &&
+  'identityPath' in value &&
+  'heartbeatPath' in value &&
+  'memoryPath' in value
+
+export const isAssistantList = (value: unknown): value is Assistant[] =>
+  Array.isArray(value) && value.every(isAssistant)
 
 export const isChat = (value: unknown): value is Chat =>
   typeof value === 'object' && value !== null && 'id' in value && 'messages' in value

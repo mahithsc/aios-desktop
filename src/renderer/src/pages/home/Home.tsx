@@ -47,26 +47,26 @@ const getStatusClassName = (status?: ChatMetadata['status']): string => {
 const getChatTitle = (chat?: Pick<ChatMetadata, 'title'> | null): string =>
   chat?.title?.trim() || 'Untitled chat'
 
-const getApplicationTitle = (artifact: CanvasArtifact, chat?: ChatMetadata): string =>
+const getArtifactTitle = (artifact: CanvasArtifact, chat?: ChatMetadata): string =>
   artifact.title?.trim() || artifact.name?.trim() || getChatTitle(chat)
 
-const getApplicationSubtitle = (artifact: CanvasArtifact): string =>
+const getArtifactSubtitle = (artifact: CanvasArtifact): string =>
   artifact.filePath?.trim() || artifact.url?.trim() || 'Canvas artifact'
 
-const getApplicationTypeLabel = (artifact: CanvasArtifact): string => {
+const getArtifactTypeLabel = (artifact: CanvasArtifact): string => {
   const lowerName = artifact.name?.toLowerCase()
   const lowerPath = artifact.filePath?.toLowerCase()
 
   if (lowerName?.endsWith('.html') || lowerPath?.endsWith('.html')) {
-    return 'Web app'
+    return 'HTML artifact'
   }
 
   if (artifact.kind === 'image') return 'Image'
   if (artifact.kind === 'video') return 'Video'
-  return 'Prototype'
+  return 'Artifact'
 }
 
-const ApplicationIcon = ({ artifact }: { artifact: CanvasArtifact }): JSX.Element => {
+const ArtifactIcon = ({ artifact }: { artifact: CanvasArtifact }): JSX.Element => {
   const lowerName = artifact.name?.toLowerCase()
   const lowerPath = artifact.filePath?.toLowerCase()
 
@@ -119,7 +119,7 @@ const ChatHistoryCard = ({
   )
 }
 
-const ApplicationCard = ({
+const ArtifactCard = ({
   entry,
   chat,
   onClick
@@ -139,11 +139,11 @@ const ApplicationCard = ({
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <div className="flex items-center gap-2 text-xs uppercase tracking-[0.14em] text-muted-foreground">
-            <ApplicationIcon artifact={artifact} />
-            <span>{getApplicationTypeLabel(artifact)}</span>
+            <ArtifactIcon artifact={artifact} />
+            <span>{getArtifactTypeLabel(artifact)}</span>
           </div>
           <div className="mt-2 truncate text-sm font-medium text-foreground">
-            {getApplicationTitle(artifact, chat)}
+            {getArtifactTitle(artifact, chat)}
           </div>
         </div>
         <span className="rounded-full bg-secondary px-2 py-0.5 text-[11px] font-medium text-secondary-foreground">
@@ -151,7 +151,7 @@ const ApplicationCard = ({
         </span>
       </div>
       <div className="mt-2 line-clamp-2 break-all text-xs text-muted-foreground">
-        {getApplicationSubtitle(artifact)}
+        {getArtifactSubtitle(artifact)}
       </div>
       <div className="mt-3 flex items-center gap-2 text-[11px] uppercase tracking-[0.14em] text-muted-foreground">
         <span>Built {formatTimestamp(entry.createdAt)}</span>
@@ -185,7 +185,7 @@ const Home = ({ onOpenAgents }: HomeProps): JSX.Element => {
     onFilesDropped: uploadFiles
   })
   const recentChats = [...chatHistory].sort((a, b) => b.updatedAt - a.updatedAt).slice(0, 6)
-  const applications = useMemo(
+  const artifacts = useMemo(
     () =>
       Object.values(canvasArtifactsByChatId)
         .filter((entry): entry is ChatCanvasArtifact => Boolean(entry))
@@ -322,14 +322,14 @@ const Home = ({ onOpenAgents }: HomeProps): JSX.Element => {
 
         <section className="w-full max-w-3xl">
           <div className="mb-3 flex items-center justify-between">
-            <h2 className="text-sm font-medium text-foreground">Applications</h2>
-            <span className="text-xs text-muted-foreground">{applications.length} saved</span>
+            <h2 className="text-sm font-medium text-foreground">Artifacts</h2>
+            <span className="text-xs text-muted-foreground">{artifacts.length} saved</span>
           </div>
 
-          {applications.length > 0 ? (
+          {artifacts.length > 0 ? (
             <div className="grid gap-3 sm:grid-cols-2">
-              {applications.map((entry) => (
-                <ApplicationCard
+              {artifacts.map((entry) => (
+                <ArtifactCard
                   key={entry.chatId}
                   entry={entry}
                   chat={chatHistoryById.get(entry.chatId)}
@@ -339,7 +339,7 @@ const Home = ({ onOpenAgents }: HomeProps): JSX.Element => {
             </div>
           ) : (
             <div className="rounded-2xl border border-dashed border-border bg-card px-4 py-6 text-sm text-muted-foreground">
-              Applications you build in chat will appear here so you can jump back into them.
+              Canvas artifacts from your chats will appear here so you can jump back into them.
             </div>
           )}
         </section>

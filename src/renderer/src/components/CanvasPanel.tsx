@@ -24,15 +24,6 @@ const deriveServedUrl = (artifact: CanvasArtifact): string | null => {
       .join('/')}`
   }
 
-  const appsIndex = normalizedPath.indexOf('/workspace/apps/')
-  if (appsIndex >= 0) {
-    const appRelativePath = normalizedPath.slice(appsIndex + '/workspace/apps/'.length)
-    return `${SERVER_URL}/apps/${appRelativePath
-      .split('/')
-      .map((part) => encodeURIComponent(part))
-      .join('/')}`
-  }
-
   return null
 }
 

@@ -9,6 +9,7 @@ import {
   type MouseEvent as ReactMouseEvent
 } from 'react'
 import { useChatStore } from '../../store/useChatSessionStore'
+import { useAssistantStore } from '../../store/useAssistantStore'
 import { useCanvasStore } from '../../store/useCanvasStore'
 import { useInputStore } from '../../store/useInputStore'
 import CanvasPanel from '../../components/CanvasPanel'
@@ -91,6 +92,7 @@ const Agents = (): JSX.Element => {
   const chat = useChatStore((state) => state.chat)
   const chatHistory = useChatStore((state) => state.chatHistory)
   const newChat = useChatStore((state) => state.newChat)
+  const assistantsByChatId = useAssistantStore((state) => state.assistantsByChatId)
   const addUserMessage = useChatStore((state) => state.addUserMessage)
   const createAssistantMessageStub = useChatStore((state) => state.createAssistantMessageStub)
   const canvasArtifact = useCanvasStore((state) => state.artifactsByChatId[chat.id])
@@ -263,7 +265,7 @@ const Agents = (): JSX.Element => {
             previousChats.map((historyChat) => (
               <ChatHistoryItem
                 key={historyChat.id}
-                title={getChatTitle(historyChat)}
+                title={assistantsByChatId[historyChat.id]?.title || getChatTitle(historyChat)}
                 subtitle={`Updated ${formatTimestamp(historyChat.updatedAt)}`}
                 status={historyChat.status}
                 isActive={historyChat.id === chat.id}
@@ -284,7 +286,7 @@ const Agents = (): JSX.Element => {
             <div className="flex items-center justify-between gap-3">
               <div className="min-w-0">
                 <h1 className="truncate text-sm font-medium text-foreground">
-                  {getChatTitle(chat)}
+                  {assistantsByChatId[chat.id]?.title || getChatTitle(chat)}
                 </h1>
                 <div className="text-xs text-muted-foreground">
                   Updated {formatTimestamp(chat.updatedAt)}

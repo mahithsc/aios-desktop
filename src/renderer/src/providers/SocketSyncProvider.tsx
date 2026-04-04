@@ -1,5 +1,7 @@
 import { useEffect, type ReactNode } from 'react'
 import {
+  isAssistant,
+  isAssistantList,
   getChatCanvasArtifact,
   isChat,
   isChatHistory,
@@ -12,6 +14,7 @@ import {
 } from '../lib/socketEventGuards'
 import { runEventToChatEvent } from '../lib/runEventToChatEvent'
 import { useCanvasStore } from '../store/useCanvasStore'
+import { useAssistantStore } from '../store/useAssistantStore'
 import { useChatStore } from '../store/useChatSessionStore'
 import { useCronStore } from '../store/useCronStore'
 import { useNotificationStore } from '../store/useNotificationStore'
@@ -28,12 +31,18 @@ const SocketSyncProvider = ({ children }: SocketSyncProviderProps): ReactNode =>
   const setChat = useChatStore((state) => state.setChat)
   const setChatHistory = useChatStore((state) => state.setChatHistory)
   const setCanvasArtifact = useCanvasStore((state) => state.setCanvasArtifact)
+  const setAssistants = useAssistantStore((state) => state.setAssistants)
+  const upsertAssistant = useAssistantStore((state) => state.upsertAssistant)
   const setUpcomingCrons = useCronStore((state) => state.setUpcomingCrons)
   const addNotification = useNotificationStore((state) => state.addNotification)
   const dismissNotification = useNotificationStore((state) => state.dismissNotification)
   const setNotifications = useNotificationStore((state) => state.setNotifications)
 
   useEffect(() => {
+    window.api.sendSocketMessage({
+      type: 'assistant.list',
+      data: null
+    })
     window.api.sendSocketMessage({
       type: 'chat-history',
       data: null
@@ -71,6 +80,24 @@ const SocketSyncProvider = ({ children }: SocketSyncProviderProps): ReactNode =>
         } else {
           setChatHistory([])
         }
+        return
+      }
+
+      if (socketEvent.type === 'assistant.list') {
+        if (isAssistantList(socketEvent.data)) {
+          setAssistants(socketEvent.data)
+        } else {
+          setAssistants([])
+        }
+        return
+      }
+
+      if (socketEvent.type === 'assistant.init' && isAssistant(socketEvent.data)) {
+        upsertAssistant(socketEvent.data)
+        window.api.sendSocketMessage({
+          type: 'chat-history',
+          data: null
+        })
         return
       }
 
@@ -142,6 +169,20 @@ const SocketSyncProvider = ({ children }: SocketSyncProviderProps): ReactNode =>
         output: socketEvent.data.event.data?.output
       })
 
+      if (
+        socketEvent.data.event.type === 'tool_call_end' &&
+        socketEvent.data.event.data?.toolName === 'assistant'
+      ) {
+        window.api.sendSocketMessage({
+          type: 'assistant.list',
+          data: null
+        })
+        window.api.sendSocketMessage({
+          type: 'chat-history',
+          data: null
+        })
+      }
+
       if (socketEvent.data.chatId !== useChatStore.getState().chat.id) {
         console.debug('[canvas]', 'Ignoring run.event for inactive chat.', {
           runEventChatId: socketEvent.data.chatId,
@@ -199,10 +240,12 @@ const SocketSyncProvider = ({ children }: SocketSyncProviderProps): ReactNode =>
     bindAssistantRun,
     dismissNotification,
     setCanvasArtifact,
+    setAssistants,
     setChat,
     setChatHistory,
     setUpcomingCrons,
-    setNotifications
+    setNotifications,
+    upsertAssistant
   ])
 
   return children

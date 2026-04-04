@@ -1,3 +1,4 @@
+import type { Assistant, AssistantInitRequest } from './assistant'
 import type { Chat, ChatMetadata, LLMEvent } from './chat'
 import type { CronUpcomingListResponse } from './cron'
 import type {
@@ -15,6 +16,8 @@ import type {
 } from './run'
 
 export type WSEnvelopeTypes =
+  | 'assistant.list'
+  | 'assistant.init'
   | 'chat'
   | 'chat-history'
   | 'chat.submit'
@@ -27,6 +30,16 @@ export type WSEnvelopeTypes =
   | 'run.stop'
   | 'process.snapshot.list'
   | 'run.resume'
+
+export interface AssistantListWSEnvelope {
+  type: 'assistant.list'
+  data: Assistant[] | null
+}
+
+export interface AssistantInitWSEnvelope {
+  type: 'assistant.init'
+  data: AssistantInitRequest | Assistant
+}
 
 export interface ChatWSEnvelope {
   type: 'chat'
@@ -92,6 +105,8 @@ export interface RunResumeWSEnvelope {
 }
 
 export type WSEnvelope =
+  | AssistantListWSEnvelope
+  | AssistantInitWSEnvelope
   | ChatWSEnvelope
   | ChatHistoryWSEnvelope
   | ChatSubmitWSEnvelope
