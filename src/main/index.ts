@@ -1,15 +1,23 @@
-import { app, BrowserWindow, globalShortcut, ipcMain, Notification } from 'electron'
+import { app, BrowserWindow, globalShortcut, ipcMain, Notification, screen, shell } from 'electron'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import { SocketService } from './services/SocketService'
-import { createMainWindow } from './windows/createMainWindow'
-import { createWidgetWindow, getWidgetWindowBounds } from './windows/createWidgetWindow'
+import { createMainWindow, sharedWindowOptions } from './windows/createMainWindow'
 import { SERVER_URL } from '../shared/config'
 import type { MessageAttachment } from '../shared/chat'
 import type { WSEnvelope } from '../shared/ws'
-import { WIDGET_SHORTCUT } from '../shared/window'
+import {
+  parseChildWindowName,
+  type ChildWindowBounds,
+  type ChildWindowRegistration,
+  type ChildWindowUpdate,
+  WIDGET_SHORTCUT,
+  WIDGET_WINDOW_KEY,
+  WIDGET_WINDOW_TOP_OFFSET
+} from '../shared/window'
 
 const socketService = new SocketService((attempt) => Math.min(1_000 * 2 ** (attempt - 1), 10_000))
-let isQuitting = false
+const childWindowRegistrations = new Map<string, ChildWindowRegistration>()
+const childWindows = new Map<string, BrowserWindow>()
 
 type UploadAttachmentFile = {
   name: string
@@ -35,12 +43,146 @@ const getUploadErrorMessage = async (response: Response): Promise<string> => {
   return response.statusText || 'Attachment upload failed.'
 }
 
+const getDefaultWidgetBounds = (bounds: ChildWindowBounds): Electron.Rectangle => {
+  const display = screen.getPrimaryDisplay()
+  const { x, y, width } = display.workArea
+
+  return {
+    x: Math.round(x + (width - bounds.width) / 2),
+    y: y + WIDGET_WINDOW_TOP_OFFSET,
+    width: bounds.width,
+    height: bounds.height
+  }
+}
+
+const resolveChildWindowBounds = (
+  windowKey: string,
+  bounds: ChildWindowBounds
+): Electron.Rectangle => {
+  if (bounds.x !== undefined && bounds.y !== undefined) {
+    return {
+      x: bounds.x,
+      y: bounds.y,
+      width: bounds.width,
+      height: bounds.height
+    }
+  }
+
+  if (windowKey === WIDGET_WINDOW_KEY) {
+    return getDefaultWidgetBounds(bounds)
+  }
+
+  return {
+    x: 0,
+    y: 0,
+    width: bounds.width,
+    height: bounds.height
+  }
+}
+
+const toChildWindowOptions = (
+  registration: ChildWindowRegistration
+): Electron.BrowserWindowConstructorOptions => {
+  const bounds = resolveChildWindowBounds(registration.windowKey, registration.options.bounds)
+
+  return {
+    ...sharedWindowOptions,
+    ...bounds,
+    title: registration.title,
+    show: false,
+    frame: registration.options.frame,
+    transparent: registration.options.transparent,
+    backgroundColor: registration.options.backgroundColor,
+    alwaysOnTop: registration.options.alwaysOnTop,
+    skipTaskbar: registration.options.skipTaskbar,
+    resizable: registration.options.resizable,
+    minimizable: registration.options.minimizable,
+    maximizable: registration.options.maximizable,
+    fullscreenable: registration.options.fullscreenable,
+    movable: registration.options.movable,
+    hasShadow: registration.options.hasShadow,
+    acceptFirstMouse: registration.options.acceptFirstMouse,
+    hiddenInMissionControl: registration.options.hiddenInMissionControl,
+    ...(process.platform === 'darwin' && registration.options.type
+      ? { type: registration.options.type }
+      : {})
+  }
+}
+
+const applyChildWindowRegistration = (
+  childWindow: BrowserWindow,
+  registration: ChildWindowRegistration
+): void => {
+  const bounds = resolveChildWindowBounds(registration.windowKey, registration.options.bounds)
+
+  childWindow.setTitle(registration.title)
+  childWindow.setBounds(bounds, false)
+  childWindow.setAlwaysOnTop(
+    registration.options.alwaysOnTop ?? false,
+    registration.options.alwaysOnTopLevel ?? 'normal'
+  )
+
+  if (registration.options.visibleOnAllWorkspaces !== undefined) {
+    childWindow.setVisibleOnAllWorkspaces(registration.options.visibleOnAllWorkspaces, {
+      visibleOnFullScreen: registration.options.visibleOnFullScreen ?? false,
+      ...(process.platform === 'darwin' ? { skipTransformProcessType: true } : {})
+    })
+  }
+
+  if (registration.options.skipTaskbar !== undefined) {
+    childWindow.setSkipTaskbar(registration.options.skipTaskbar)
+  }
+
+  if (registration.options.hasShadow !== undefined) {
+    childWindow.setHasShadow(registration.options.hasShadow)
+  }
+
+  if (registration.options.resizable !== undefined) {
+    childWindow.setResizable(registration.options.resizable)
+  }
+
+  if (registration.options.minimizable !== undefined) {
+    childWindow.setMinimizable(registration.options.minimizable)
+  }
+
+  if (registration.options.maximizable !== undefined) {
+    childWindow.setMaximizable(registration.options.maximizable)
+  }
+
+  if (registration.options.fullscreenable !== undefined) {
+    childWindow.setFullScreenable(registration.options.fullscreenable)
+  }
+
+  if (registration.options.movable !== undefined) {
+    childWindow.setMovable(registration.options.movable)
+  }
+}
+
+const mergeChildWindowRegistration = (
+  current: ChildWindowRegistration,
+  update: ChildWindowUpdate
+): ChildWindowRegistration => ({
+  ...current,
+  title: update.title ?? current.title,
+  options: update.options
+    ? {
+        ...current.options,
+        ...update.options,
+        bounds: update.options.bounds
+          ? {
+              ...current.options.bounds,
+              ...update.options.bounds
+            }
+          : current.options.bounds
+      }
+    : current.options
+})
+
 // This method will be called when Electron has finished
 // initialization and is ready to create browser windows.
 // Some APIs can only be used after this event occurs.
 app.whenReady().then(() => {
   let mainWindow: BrowserWindow | null = null
-  let widgetWindow: BrowserWindow | null = null
 
   const ensureMainWindow = (): BrowserWindow => {
     if (mainWindow?.isDestroyed()) {
@@ -49,7 +191,52 @@ app.whenReady().then(() => {
 
     if (!mainWindow) {
       mainWindow = createMainWindow()
+      mainWindow.webContents.setWindowOpenHandler((details) => {
+        const childWindowKey = parseChildWindowName(details.frameName)
+
+        if (!childWindowKey) {
+          shell.openExternal(details.url)
+          return { action: 'deny' }
+        }
+
+        const registration = childWindowRegistrations.get(childWindowKey)
+        if (!registration) {
+          return { action: 'deny' }
+        }
+
+        return {
+          action: 'allow',
+          overrideBrowserWindowOptions: toChildWindowOptions(registration)
+        }
+      })
+      mainWindow.webContents.on('did-create-window', (childWindow, details) => {
+        const childWindowKey = parseChildWindowName(details.frameName)
+        if (!childWindowKey) {
+          return
+        }
+
+        childWindows.set(childWindowKey, childWindow)
+        childWindow.webContents.setWindowOpenHandler((windowDetails) => {
+          shell.openExternal(windowDetails.url)
+          return { action: 'deny' }
+        })
+
+        const registration = childWindowRegistrations.get(childWindowKey)
+        if (registration) {
+          applyChildWindowRegistration(childWindow, registration)
+        }
+
+        childWindow.on('closed', () => {
+          childWindows.delete(childWindowKey)
+        })
+      })
       mainWindow.on('closed', () => {
+        childWindows.forEach((childWindow) => {
+          if (!childWindow.isDestroyed()) {
+            childWindow.close()
+          }
+        })
+        childWindows.clear()
         mainWindow = null
       })
     }
@@ -57,78 +244,29 @@ app.whenReady().then(() => {
     return mainWindow
   }
 
-  const syncWidgetBounds = (): void => {
-    if (!widgetWindow || widgetWindow.isDestroyed()) {
+  const sendWidgetToggleRequested = (): void => {
+    const targetMainWindow = ensureMainWindow()
+
+    if (targetMainWindow.isMinimized()) {
+      targetMainWindow.restore()
+    }
+
+    if (!targetMainWindow.isVisible()) {
+      targetMainWindow.show()
+    }
+
+    const emit = (): void => {
+      if (!targetMainWindow.isDestroyed()) {
+        targetMainWindow.webContents.send('main:toggle-widget-window-requested')
+      }
+    }
+
+    if (targetMainWindow.webContents.isLoadingMainFrame()) {
+      targetMainWindow.webContents.once('did-finish-load', emit)
       return
     }
 
-    widgetWindow.setBounds(getWidgetWindowBounds(), false)
-  }
-
-  const emitWidgetVisibilityChange = (visible: boolean): void => {
-    if (!widgetWindow || widgetWindow.isDestroyed()) {
-      return
-    }
-
-    widgetWindow.webContents.send('main:widget-visibility-changed', visible)
-  }
-
-  const hideWidgetWindow = (): void => {
-    if (!widgetWindow || widgetWindow.isDestroyed() || !widgetWindow.isVisible()) {
-      return
-    }
-
-    widgetWindow.hide()
-    emitWidgetVisibilityChange(false)
-  }
-
-  const showWidgetWindow = (): void => {
-    const targetWidgetWindow = ensureWidgetWindow()
-    syncWidgetBounds()
-
-    if (process.platform === 'darwin') {
-      targetWidgetWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true })
-      targetWidgetWindow.setAlwaysOnTop(true, 'floating')
-    } else {
-      targetWidgetWindow.setAlwaysOnTop(true)
-    }
-
-    targetWidgetWindow.show()
-    app.focus({ steal: true })
-    targetWidgetWindow.focus()
-    emitWidgetVisibilityChange(true)
-  }
-
-  const toggleWidgetWindow = (): void => {
-    if (widgetWindow && !widgetWindow.isDestroyed() && widgetWindow.isVisible()) {
-      hideWidgetWindow()
-      return
-    }
-
-    showWidgetWindow()
-  }
-
-  const ensureWidgetWindow = (): BrowserWindow => {
-    if (widgetWindow?.isDestroyed()) {
-      widgetWindow = null
-    }
-
-    if (!widgetWindow) {
-      widgetWindow = createWidgetWindow()
-      widgetWindow.on('close', (event) => {
-        if (isQuitting) {
-          return
-        }
-
-        event.preventDefault()
-        hideWidgetWindow()
-      })
-      widgetWindow.on('closed', () => {
-        widgetWindow = null
-      })
-    }
-
-    return widgetWindow
+    emit()
   }
 
   const registerWidgetShortcut = (): void => {
@@ -137,7 +275,7 @@ app.whenReady().then(() => {
     }
 
     const didRegister = globalShortcut.register(WIDGET_SHORTCUT, () => {
-      toggleWidgetWindow()
+      sendWidgetToggleRequested()
     })
 
     if (!didRegister) {
@@ -191,12 +329,42 @@ app.whenReady().then(() => {
     console.log(`[renderer] Sent socket message: ${envelope.type}`)
   })
 
-  ipcMain.on('renderer:toggle-widget-window', () => {
-    toggleWidgetWindow()
+  ipcMain.handle(
+    'renderer:register-child-window',
+    async (_event, registration: ChildWindowRegistration): Promise<void> => {
+      childWindowRegistrations.set(registration.windowKey, registration)
+
+      const existingChildWindow = childWindows.get(registration.windowKey)
+      if (existingChildWindow && !existingChildWindow.isDestroyed()) {
+        applyChildWindowRegistration(existingChildWindow, registration)
+      }
+    }
+  )
+
+  ipcMain.on('renderer:update-child-window', (_event, update: ChildWindowUpdate) => {
+    const currentRegistration = childWindowRegistrations.get(update.windowKey)
+    if (!currentRegistration) {
+      return
+    }
+
+    const nextRegistration = mergeChildWindowRegistration(currentRegistration, update)
+    childWindowRegistrations.set(update.windowKey, nextRegistration)
+
+    const existingChildWindow = childWindows.get(update.windowKey)
+    if (existingChildWindow && !existingChildWindow.isDestroyed()) {
+      applyChildWindowRegistration(existingChildWindow, nextRegistration)
+    }
   })
 
-  ipcMain.on('renderer:hide-widget-window', () => {
-    hideWidgetWindow()
+  ipcMain.on('renderer:show-child-window', (_event, windowKey: string) => {
+    const childWindow = childWindows.get(windowKey)
+    if (!childWindow || childWindow.isDestroyed()) {
+      return
+    }
+
+    childWindow.show()
+    app.focus({ steal: true })
+    childWindow.focus()
   })
 
   ipcMain.handle(
@@ -275,7 +443,6 @@ app.whenReady().then(() => {
 
   socketService.connect(SERVER_URL + '/ws')
   ensureMainWindow()
-  ensureWidgetWindow()
   registerWidgetShortcut()
 
   app.on('activate', function () {
@@ -305,7 +472,6 @@ app.on('window-all-closed', () => {
 
 app.on('before-quit', () => {
   globalShortcut.unregisterAll()
-  isQuitting = true
   socketService.destroy()
 })
 

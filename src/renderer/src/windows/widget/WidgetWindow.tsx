@@ -8,9 +8,12 @@ import { useInputStore } from '../../store/useInputStore'
 const dragRegionStyle = { WebkitAppRegion: 'drag' } as CSSProperties
 const noDragRegionStyle = { WebkitAppRegion: 'no-drag' } as CSSProperties
 
-const WidgetWindow = (): JSX.Element => {
+type WidgetWindowProps = {
+  onRequestClose: () => void
+}
+
+const WidgetWindow = ({ onRequestClose }: WidgetWindowProps): JSX.Element => {
   const scrollRef = useRef<HTMLDivElement | null>(null)
-  const composerFocusRef = useRef<(() => void) | null>(null)
   const value = useInputStore((state) => state.value)
   const setValue = useInputStore((state) => state.setValue)
   const clearValue = useInputStore((state) => state.clearValue)
@@ -44,16 +47,6 @@ const WidgetWindow = (): JSX.Element => {
       behavior: 'smooth'
     })
   }, [chat.messages])
-
-  useEffect(() => {
-    const unsubscribe = window.api.onWidgetVisibilityChanged((visible) => {
-      if (visible) {
-        composerFocusRef.current?.()
-      }
-    })
-
-    return unsubscribe
-  }, [])
 
   const handleSubmit = (): void => {
     if (isRunning) {
@@ -97,7 +90,7 @@ const WidgetWindow = (): JSX.Element => {
   ): void => {
     if (event.key === 'Escape') {
       event.preventDefault()
-      window.api.hideWidgetWindow()
+      onRequestClose()
       return
     }
 
@@ -126,7 +119,7 @@ const WidgetWindow = (): JSX.Element => {
           <div className="flex items-center gap-2" style={noDragRegionStyle}>
             <button
               type="button"
-              onClick={() => window.api.hideWidgetWindow()}
+              onClick={onRequestClose}
               className="rounded-full border border-white/10 bg-white/6 px-3 py-1 text-xs text-white/72 transition hover:bg-white/12 hover:text-white"
             >
               Esc
@@ -171,9 +164,6 @@ const WidgetWindow = (): JSX.Element => {
             autoFocus
             showAttachmentButton={false}
             placeholder="Message Aios..."
-            onFocusReady={(focus) => {
-              composerFocusRef.current = focus
-            }}
           />
         </footer>
       </div>

@@ -1,9 +1,8 @@
 import type { BrowserWindowConstructorOptions } from 'electron'
-import { BrowserWindow, shell } from 'electron'
+import { BrowserWindow } from 'electron'
+import { is } from '@electron-toolkit/utils'
 import { join } from 'path'
 import icon from '../../../resources/icon.png?asset'
-import { DESKTOP_WINDOW_MODE } from '../../shared/window'
-import { loadRendererWindow } from './loadRendererWindow'
 
 const sharedWindowOptions: BrowserWindowConstructorOptions = {
   autoHideMenuBar: true,
@@ -29,12 +28,11 @@ export function createMainWindow(): BrowserWindow {
     mainWindow.show()
   })
 
-  mainWindow.webContents.setWindowOpenHandler((details) => {
-    shell.openExternal(details.url)
-    return { action: 'deny' }
-  })
-
-  loadRendererWindow(mainWindow, DESKTOP_WINDOW_MODE.main)
+  if (is.dev && process.env['ELECTRON_RENDERER_URL']) {
+    void mainWindow.loadURL(process.env['ELECTRON_RENDERER_URL'])
+  } else {
+    void mainWindow.loadFile(join(__dirname, '../renderer/index.html'))
+  }
 
   return mainWindow
 }

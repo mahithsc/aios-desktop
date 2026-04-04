@@ -1,16 +1,21 @@
-import type { JSX } from 'react'
-import { DESKTOP_WINDOW_MODE } from '@shared/window'
+import { useEffect, useState, type JSX } from 'react'
 import MainWindow from '@renderer/windows/main/MainWindow'
-import WidgetWindow from '@renderer/windows/widget/WidgetWindow'
+import WidgetPortal from '@renderer/windows/widget/WidgetPortal'
 import SocketSyncProvider from './providers/SocketSyncProvider'
-import { getWindowMode } from './lib/windowMode'
 
 const App = (): JSX.Element => {
-  const windowMode = getWindowMode()
+  const [isWidgetOpen, setIsWidgetOpen] = useState(false)
+
+  useEffect(() => {
+    return window.api.onToggleWidgetWindowRequested(() => {
+      setIsWidgetOpen((current) => !current)
+    })
+  }, [])
 
   return (
     <SocketSyncProvider>
-      {windowMode === DESKTOP_WINDOW_MODE.widget ? <WidgetWindow /> : <MainWindow />}
+      <MainWindow />
+      {isWidgetOpen ? <WidgetPortal onClosed={() => setIsWidgetOpen(false)} /> : null}
     </SocketSyncProvider>
   )
 }

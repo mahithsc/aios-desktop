@@ -2,6 +2,7 @@ import { contextBridge, ipcRenderer } from 'electron'
 import { electronAPI } from '@electron-toolkit/preload'
 import type { MessageAttachment } from '../shared/chat'
 import type { WSEnvelope } from '../shared/ws'
+import type { ChildWindowRegistration, ChildWindowUpdate } from '../shared/window'
 
 type UploadAttachmentFile = {
   name: string
@@ -13,8 +14,11 @@ type UploadAttachmentFile = {
 const api = {
   sendSocketMessage: (message: WSEnvelope) =>
     ipcRenderer.send('renderer:send-socket-message', message),
-  toggleWidgetWindow: () => ipcRenderer.send('renderer:toggle-widget-window'),
-  hideWidgetWindow: () => ipcRenderer.send('renderer:hide-widget-window'),
+  registerChildWindow: (registration: ChildWindowRegistration): Promise<void> =>
+    ipcRenderer.invoke('renderer:register-child-window', registration),
+  updateChildWindow: (update: ChildWindowUpdate) =>
+    ipcRenderer.send('renderer:update-child-window', update),
+  showChildWindow: (windowKey: string) => ipcRenderer.send('renderer:show-child-window', windowKey),
   uploadAttachments: (
     chatId: string,
     files: UploadAttachmentFile[]
@@ -33,15 +37,15 @@ const api = {
       ipcRenderer.removeListener('main:socket-event', subscription)
     }
   },
-  onWidgetVisibilityChanged: (listener: (visible: boolean) => void) => {
-    const subscription = (_event: Electron.IpcRendererEvent, visible: boolean): void => {
-      listener(visible)
+  onToggleWidgetWindowRequested: (listener: () => void) => {
+    const subscription = (): void => {
+      listener()
     }
 
-    ipcRenderer.on('main:widget-visibility-changed', subscription)
+    ipcRenderer.on('main:toggle-widget-window-requested', subscription)
 
     return () => {
-      ipcRenderer.removeListener('main:widget-visibility-changed', subscription)
+      ipcRenderer.removeListener('main:toggle-widget-window-requested', subscription)
     }
   }
 }
