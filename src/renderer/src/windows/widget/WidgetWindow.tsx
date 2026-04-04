@@ -1,9 +1,13 @@
 import type { CSSProperties, JSX, KeyboardEvent as ReactKeyboardEvent } from 'react'
-import { useEffect, useMemo, useRef } from 'react'
-import ChatComposer from '../../pages/agents/components/ChatComposer'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import ChatMessages from '../../components/ChatMessages'
 import { useChatStore } from '../../store/useChatSessionStore'
 import { useInputStore } from '../../store/useInputStore'
+import {
+  WIDGET_WINDOW_KEY,
+  WIDGET_WINDOW_MAX_HEIGHT_RATIO,
+  WIDGET_WINDOW_MIN_HEIGHT
+} from '@shared/window'
 
 const dragRegionStyle = { WebkitAppRegion: 'drag' } as CSSProperties
 const noDragRegionStyle = { WebkitAppRegion: 'no-drag' } as CSSProperties
@@ -13,13 +17,18 @@ type WidgetWindowProps = {
 }
 
 const WidgetWindow = ({ onRequestClose }: WidgetWindowProps): JSX.Element => {
-  const scrollRef = useRef<HTMLDivElement | null>(null)
+  const historyRef = useRef<HTMLDivElement | null>(null)
+  const historyContentRef = useRef<HTMLDivElement | null>(null)
+  const composerRef = useRef<HTMLDivElement | null>(null)
+  const textareaRef = useRef<HTMLTextAreaElement | null>(null)
   const value = useInputStore((state) => state.value)
   const setValue = useInputStore((state) => state.setValue)
   const clearValue = useInputStore((state) => state.clearValue)
   const chat = useChatStore((state) => state.chat)
   const addUserMessage = useChatStore((state) => state.addUserMessage)
   const createAssistantMessageStub = useChatStore((state) => state.createAssistantMessageStub)
+  const lastAppliedHeightRef = useRef(0)
+  const [historyViewportHeight, setHistoryViewportHeight] = useState<number | null>(null)
 
   const activeRunId = useMemo(() => {
     const activeMessage = [...chat.messages]
@@ -33,20 +42,103 @@ const WidgetWindow = ({ onRequestClose }: WidgetWindowProps): JSX.Element => {
 
     return activeMessage?.role === 'assistant' ? (activeMessage.runId ?? null) : null
   }, [chat.messages])
-
   const isRunning = chat.status === 'streaming'
+  const maxWindowHeight = useMemo(
+    () =>
+      Math.max(
+        WIDGET_WINDOW_MIN_HEIGHT,
+        Math.floor(window.screen.availHeight * WIDGET_WINDOW_MAX_HEIGHT_RATIO)
+      ),
+    []
+  )
+  const shouldShowHistory = chat.messages.length > 0 || isRunning
 
   useEffect(() => {
-    const nextScrollContainer = scrollRef.current
-    if (!nextScrollContainer) {
+    const textarea = textareaRef.current
+    if (!textarea) {
       return
     }
 
-    nextScrollContainer.scrollTo({
-      top: nextScrollContainer.scrollHeight,
+    textarea.style.height = 'auto'
+    textarea.style.height = `${Math.min(textarea.scrollHeight, 192)}px`
+  }, [value])
+
+  useEffect(() => {
+    const history = historyRef.current
+    if (!history || !shouldShowHistory) {
+      return
+    }
+
+    history.scrollTo({
+      top: history.scrollHeight,
       behavior: 'smooth'
     })
-  }, [chat.messages])
+  }, [chat.messages, shouldShowHistory])
+
+  useLayoutEffect(() => {
+    const composer = composerRef.current
+    if (!composer) {
+      return
+    }
+
+    let animationFrameId = 0
+
+    const syncLayout = (): void => {
+      const composerHeight = Math.ceil(composer.getBoundingClientRect().height)
+      const historyNaturalHeight =
+        shouldShowHistory && historyContentRef.current
+          ? Math.ceil(historyContentRef.current.getBoundingClientRect().height)
+          : 0
+      const nextHeight = Math.max(
+        WIDGET_WINDOW_MIN_HEIGHT,
+        Math.min(maxWindowHeight, composerHeight + historyNaturalHeight)
+      )
+      const nextHistoryViewportHeight = shouldShowHistory
+        ? Math.max(0, nextHeight - composerHeight)
+        : null
+
+      setHistoryViewportHeight((current) =>
+        current === nextHistoryViewportHeight ? current : nextHistoryViewportHeight
+      )
+
+      if (nextHeight === lastAppliedHeightRef.current) {
+        return
+      }
+
+      lastAppliedHeightRef.current = nextHeight
+
+      window.api.updateChildWindow({
+        windowKey: WIDGET_WINDOW_KEY,
+        options: {
+          bounds: {
+            height: nextHeight
+          }
+        }
+      })
+    }
+
+    const scheduleSync = (): void => {
+      window.cancelAnimationFrame(animationFrameId)
+      animationFrameId = window.requestAnimationFrame(syncLayout)
+    }
+
+    scheduleSync()
+
+    const resizeObserver = new ResizeObserver(() => {
+      scheduleSync()
+    })
+
+    resizeObserver.observe(composer)
+
+    if (historyContentRef.current) {
+      resizeObserver.observe(historyContentRef.current)
+    }
+
+    return () => {
+      resizeObserver.disconnect()
+      window.cancelAnimationFrame(animationFrameId)
+    }
+  }, [chat.messages, maxWindowHeight, shouldShowHistory, value])
 
   const handleSubmit = (): void => {
     if (isRunning) {
@@ -103,70 +195,57 @@ const WidgetWindow = ({ onRequestClose }: WidgetWindowProps): JSX.Element => {
   }
 
   return (
-    <main className="h-screen overflow-hidden bg-transparent p-3 text-foreground">
-      <div className="relative flex h-full flex-col overflow-hidden rounded-[28px] border border-white/12 bg-[linear-gradient(180deg,rgba(38,38,38,0.88),rgba(20,20,20,0.78))] shadow-[0_28px_90px_rgba(0,0,0,0.45)] backdrop-blur-2xl">
-        <header
-          className="absolute inset-x-0 top-0 z-10 flex items-center justify-between gap-3 px-4 py-3"
-          style={dragRegionStyle}
-        >
-          <div className="flex items-center gap-2">
-            <div className="h-2 w-2 rounded-full bg-emerald-400/80" />
-            <span className="text-xs font-medium uppercase tracking-[0.24em] text-white/62">
-              Aios Widget
-            </span>
-          </div>
-
-          <div className="flex items-center gap-2" style={noDragRegionStyle}>
-            <button
-              type="button"
-              onClick={onRequestClose}
-              className="rounded-full border border-white/10 bg-white/6 px-3 py-1 text-xs text-white/72 transition hover:bg-white/12 hover:text-white"
-            >
-              Esc
-            </button>
-          </div>
-        </header>
-
-        <section ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto px-5 pb-4 pt-14">
-          {chat.messages.length === 0 ? (
-            <div className="flex min-h-full items-center justify-center">
-              <div className="max-w-md text-center">
-                <div className="text-[11px] uppercase tracking-[0.28em] text-white/45">
-                  Always on top
-                </div>
-                <h1 className="mt-3 text-3xl font-medium tracking-tight text-white">
-                  Ask without leaving your screen.
-                </h1>
-                <p className="mt-3 text-sm leading-6 text-white/58">
-                  This widget stays pinned above the desktop client so you can message the agent
-                  from anywhere.
-                </p>
-              </div>
+    <main className="w-full text-foreground">
+      <section className="flex w-full min-h-0 flex-col overflow-hidden" style={dragRegionStyle}>
+        {shouldShowHistory ? (
+          <div
+            ref={historyRef}
+            className="min-h-0 overflow-y-auto"
+            style={{
+              ...noDragRegionStyle,
+              maxHeight: historyViewportHeight ? `${historyViewportHeight}px` : undefined
+            }}
+          >
+            <div ref={historyContentRef} className="px-3 pt-3">
+              <ChatMessages messages={chat.messages} bottomSpacerClassName="h-1" darkMode compact />
             </div>
-          ) : (
-            <ChatMessages messages={chat.messages} bottomSpacerClassName="h-4" darkMode compact />
-          )}
-        </section>
+          </div>
+        ) : null}
 
-        <footer className="border-t border-white/8 bg-black/8 px-4 py-4">
-          <ChatComposer
+        <div
+          ref={composerRef}
+          className={`p-3 ${shouldShowHistory ? 'border-t border-white/6' : ''}`}
+          style={noDragRegionStyle}
+        >
+          <textarea
+            ref={textareaRef}
             value={value}
-            onChange={setValue}
+            onChange={(event) => setValue(event.target.value)}
             onKeyDown={handleKeyDown}
-            onSubmit={handleSubmit}
-            onStop={handleStop}
-            attachments={[]}
-            isRunning={isRunning}
-            canStop={!!activeRunId}
-            onFilesSelected={() => Promise.resolve()}
-            onRemoveAttachment={() => undefined}
-            fixed={false}
-            autoFocus
-            showAttachmentButton={false}
             placeholder="Message Aios..."
+            autoFocus
+            rows={1}
+            className="max-h-48 w-full resize-none rounded-[18px] bg-black px-4 py-3 text-[14px] leading-6 text-white outline-none placeholder:text-white/28"
           />
-        </footer>
-      </div>
+
+          {shouldShowHistory && (
+            <div className="mt-2 flex items-center justify-between gap-3 text-[10px] uppercase tracking-[0.16em] text-white/36">
+              <span>{isRunning ? 'Streaming' : 'Conversation'}</span>
+              {isRunning ? (
+                <button
+                  type="button"
+                  onClick={handleStop}
+                  className="rounded-full border border-white/10 px-2.5 py-1 text-white/72 transition hover:border-white/20 hover:text-white"
+                >
+                  Stop
+                </button>
+              ) : (
+                <span>Enter sends</span>
+              )}
+            </div>
+          )}
+        </div>
+      </section>
     </main>
   )
 }

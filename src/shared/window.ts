@@ -47,8 +47,9 @@ export interface ChildWindowUpdate {
   }
 }
 
-export const WIDGET_WINDOW_WIDTH = 720
-export const WIDGET_WINDOW_HEIGHT = 520
+export const WIDGET_WINDOW_WIDTH = 560
+export const WIDGET_WINDOW_MIN_HEIGHT = 92
+export const WIDGET_WINDOW_MAX_HEIGHT_RATIO = 0.75
 export const WIDGET_WINDOW_TOP_OFFSET = 72
 
 export const getChildWindowName = (windowKey: string): string =>
@@ -65,7 +66,7 @@ export const createWidgetWindowRegistration = (): ChildWindowRegistration => ({
   options: {
     bounds: {
       width: WIDGET_WINDOW_WIDTH,
-      height: WIDGET_WINDOW_HEIGHT
+      height: WIDGET_WINDOW_MIN_HEIGHT
     },
     frame: false,
     transparent: true,
@@ -79,7 +80,7 @@ export const createWidgetWindowRegistration = (): ChildWindowRegistration => ({
     maximizable: false,
     fullscreenable: false,
     movable: true,
-    hasShadow: true,
+    hasShadow: false,
     acceptFirstMouse: true,
     hiddenInMissionControl: true,
     type: 'panel'
