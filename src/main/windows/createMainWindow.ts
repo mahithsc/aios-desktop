@@ -1,8 +1,8 @@
 import type { BrowserWindowConstructorOptions } from 'electron'
 import { BrowserWindow } from 'electron'
-import { is } from '@electron-toolkit/utils'
 import { join } from 'path'
 import icon from '../../../resources/icon.png?asset'
+import { loadRendererWindow } from './loadRendererWindow'
 
 const sharedWindowOptions: BrowserWindowConstructorOptions = {
   autoHideMenuBar: true,
@@ -28,11 +28,7 @@ export function createMainWindow(): BrowserWindow {
     mainWindow.show()
   })
 
-  if (is.dev && process.env['ELECTRON_RENDERER_URL']) {
-    void mainWindow.loadURL(process.env['ELECTRON_RENDERER_URL'])
-  } else {
-    void mainWindow.loadFile(join(__dirname, '../renderer/index.html'))
-  }
+  void loadRendererWindow(mainWindow)
 
   return mainWindow
 }

@@ -2,7 +2,6 @@ import { contextBridge, ipcRenderer } from 'electron'
 import { electronAPI } from '@electron-toolkit/preload'
 import type { MessageAttachment } from '../shared/chat'
 import type { WSEnvelope } from '../shared/ws'
-import type { ChildWindowRegistration, ChildWindowUpdate } from '../shared/window'
 
 type UploadAttachmentFile = {
   name: string
@@ -14,14 +13,10 @@ type UploadAttachmentFile = {
 const api = {
   sendSocketMessage: (message: WSEnvelope) =>
     ipcRenderer.send('renderer:send-socket-message', message),
-  registerChildWindow: (registration: ChildWindowRegistration): Promise<void> =>
-    ipcRenderer.invoke('renderer:register-child-window', registration),
-  updateChildWindow: (update: ChildWindowUpdate) =>
-    ipcRenderer.send('renderer:update-child-window', update),
-  showChildWindow: (windowKey: string) => ipcRenderer.send('renderer:show-child-window', windowKey),
-  hideChildWindow: (windowKey: string) => ipcRenderer.send('renderer:hide-child-window', windowKey),
-  getChildWindowMaxHeight: (windowKey: string): Promise<number> =>
-    ipcRenderer.invoke('renderer:get-child-window-max-height', windowKey),
+  showWidgetWindow: () => ipcRenderer.send('renderer:show-widget-window'),
+  hideWidgetWindow: () => ipcRenderer.send('renderer:hide-widget-window'),
+  toggleWidgetWindow: () => ipcRenderer.send('renderer:toggle-widget-window'),
+  getWidgetMaxHeight: (): Promise<number> => ipcRenderer.invoke('renderer:get-widget-max-height'),
   uploadAttachments: (
     chatId: string,
     files: UploadAttachmentFile[]
@@ -38,17 +33,6 @@ const api = {
 
     return () => {
       ipcRenderer.removeListener('main:socket-event', subscription)
-    }
-  },
-  onToggleWidgetWindowRequested: (listener: () => void) => {
-    const subscription = (): void => {
-      listener()
-    }
-
-    ipcRenderer.on('main:toggle-widget-window-requested', subscription)
-
-    return () => {
-      ipcRenderer.removeListener('main:toggle-widget-window-requested', subscription)
     }
   }
 }
