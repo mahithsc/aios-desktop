@@ -3,11 +3,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import ChatMessages from '../../components/ChatMessages'
 import { useChatStore } from '../../store/useChatSessionStore'
 import { useInputStore } from '../../store/useInputStore'
-import {
-  WIDGET_WINDOW_KEY,
-  WIDGET_WINDOW_MAX_HEIGHT_RATIO,
-  WIDGET_WINDOW_MIN_HEIGHT
-} from '@shared/window'
+import { WIDGET_WINDOW_KEY } from '@shared/window'
 
 const dragRegionStyle = { WebkitAppRegion: 'drag' } as CSSProperties
 const noDragRegionStyle = { WebkitAppRegion: 'no-drag' } as CSSProperties
@@ -17,9 +13,8 @@ type WidgetWindowProps = {
 }
 
 const WidgetWindow = ({ onRequestClose }: WidgetWindowProps): JSX.Element => {
+  const widgetRef = useRef<HTMLElement | null>(null)
   const historyRef = useRef<HTMLDivElement | null>(null)
-  const historyContentRef = useRef<HTMLDivElement | null>(null)
-  const composerRef = useRef<HTMLDivElement | null>(null)
   const textareaRef = useRef<HTMLTextAreaElement | null>(null)
   const value = useInputStore((state) => state.value)
   const setValue = useInputStore((state) => state.setValue)
@@ -27,8 +22,9 @@ const WidgetWindow = ({ onRequestClose }: WidgetWindowProps): JSX.Element => {
   const chat = useChatStore((state) => state.chat)
   const addUserMessage = useChatStore((state) => state.addUserMessage)
   const createAssistantMessageStub = useChatStore((state) => state.createAssistantMessageStub)
-  const lastAppliedHeightRef = useRef(0)
-  const [historyViewportHeight, setHistoryViewportHeight] = useState<number | null>(null)
+  const newChat = useChatStore((state) => state.newChat)
+  const [maxWindowHeight, setMaxWindowHeight] = useState<number | null>(null)
+  const [isHeightCapped, setIsHeightCapped] = useState(false)
 
   const activeRunId = useMemo(() => {
     const activeMessage = [...chat.messages]
@@ -43,14 +39,6 @@ const WidgetWindow = ({ onRequestClose }: WidgetWindowProps): JSX.Element => {
     return activeMessage?.role === 'assistant' ? (activeMessage.runId ?? null) : null
   }, [chat.messages])
   const isRunning = chat.status === 'streaming'
-  const maxWindowHeight = useMemo(
-    () =>
-      Math.max(
-        WIDGET_WINDOW_MIN_HEIGHT,
-        Math.floor(window.screen.availHeight * WIDGET_WINDOW_MAX_HEIGHT_RATIO)
-      ),
-    []
-  )
   const shouldShowHistory = chat.messages.length > 0 || isRunning
 
   useEffect(() => {
@@ -64,8 +52,36 @@ const WidgetWindow = ({ onRequestClose }: WidgetWindowProps): JSX.Element => {
   }, [value])
 
   useEffect(() => {
+    let isCancelled = false
+
+    const syncMaxWindowHeight = async (): Promise<void> => {
+      const nextMaxWindowHeight = await window.api.getChildWindowMaxHeight(WIDGET_WINDOW_KEY)
+      if (isCancelled) {
+        return
+      }
+
+      setMaxWindowHeight((current) =>
+        current === nextMaxWindowHeight ? current : nextMaxWindowHeight
+      )
+    }
+
+    void syncMaxWindowHeight()
+
+    const handleResize = (): void => {
+      void syncMaxWindowHeight()
+    }
+
+    window.addEventListener('resize', handleResize)
+
+    return () => {
+      isCancelled = true
+      window.removeEventListener('resize', handleResize)
+    }
+  }, [])
+
+  useEffect(() => {
     const history = historyRef.current
-    if (!history || !shouldShowHistory) {
+    if (!history || !shouldShowHistory || isRunning) {
       return
     }
 
@@ -73,53 +89,28 @@ const WidgetWindow = ({ onRequestClose }: WidgetWindowProps): JSX.Element => {
       top: history.scrollHeight,
       behavior: 'smooth'
     })
-  }, [chat.messages, shouldShowHistory])
+  }, [chat.messages, isRunning, shouldShowHistory])
 
   useLayoutEffect(() => {
-    const composer = composerRef.current
-    if (!composer) {
+    const widget = widgetRef.current
+    const history = historyRef.current
+
+    if (!widget || !history || maxWindowHeight === null) {
+      setIsHeightCapped(false)
       return
     }
 
     let animationFrameId = 0
 
-    const syncLayout = (): void => {
-      const composerHeight = Math.ceil(composer.getBoundingClientRect().height)
-      const historyNaturalHeight =
-        shouldShowHistory && historyContentRef.current
-          ? Math.ceil(historyContentRef.current.getBoundingClientRect().height)
-          : 0
-      const nextHeight = Math.max(
-        WIDGET_WINDOW_MIN_HEIGHT,
-        Math.min(maxWindowHeight, composerHeight + historyNaturalHeight)
-      )
-      const nextHistoryViewportHeight = shouldShowHistory
-        ? Math.max(0, nextHeight - composerHeight)
-        : null
+    const syncCappedState = (): void => {
+      const nextIsHeightCapped = shouldShowHistory && window.outerHeight >= maxWindowHeight - 1
 
-      setHistoryViewportHeight((current) =>
-        current === nextHistoryViewportHeight ? current : nextHistoryViewportHeight
-      )
-
-      if (nextHeight === lastAppliedHeightRef.current) {
-        return
-      }
-
-      lastAppliedHeightRef.current = nextHeight
-
-      window.api.updateChildWindow({
-        windowKey: WIDGET_WINDOW_KEY,
-        options: {
-          bounds: {
-            height: nextHeight
-          }
-        }
-      })
+      setIsHeightCapped((current) => (current === nextIsHeightCapped ? current : nextIsHeightCapped))
     }
 
     const scheduleSync = (): void => {
       window.cancelAnimationFrame(animationFrameId)
-      animationFrameId = window.requestAnimationFrame(syncLayout)
+      animationFrameId = window.requestAnimationFrame(syncCappedState)
     }
 
     scheduleSync()
@@ -128,11 +119,8 @@ const WidgetWindow = ({ onRequestClose }: WidgetWindowProps): JSX.Element => {
       scheduleSync()
     })
 
-    resizeObserver.observe(composer)
-
-    if (historyContentRef.current) {
-      resizeObserver.observe(historyContentRef.current)
-    }
+    resizeObserver.observe(widget)
+    resizeObserver.observe(history)
 
     return () => {
       resizeObserver.disconnect()
@@ -164,17 +152,18 @@ const WidgetWindow = ({ onRequestClose }: WidgetWindowProps): JSX.Element => {
     clearValue()
   }
 
-  const handleStop = (): void => {
-    if (!activeRunId) {
-      return
+  const handleNewMessage = (): void => {
+    if (activeRunId) {
+      window.api.sendSocketMessage({
+        type: 'run.stop',
+        data: {
+          runId: activeRunId
+        }
+      })
     }
 
-    window.api.sendSocketMessage({
-      type: 'run.stop',
-      data: {
-        runId: activeRunId
-      }
-    })
+    clearValue()
+    newChat()
   }
 
   const handleKeyDown = (
@@ -195,26 +184,40 @@ const WidgetWindow = ({ onRequestClose }: WidgetWindowProps): JSX.Element => {
   }
 
   return (
-    <main className="w-full text-foreground">
-      <section className="flex w-full min-h-0 flex-col overflow-hidden" style={dragRegionStyle}>
+    <main className={`mx-auto w-[90%] text-foreground ${isHeightCapped ? 'h-screen' : ''}`}>
+      <section
+        ref={widgetRef}
+        className={`relative flex w-full flex-col overflow-hidden rounded-[18px] bg-[rgb(30,30,30)]/70 ${isHeightCapped ? 'h-full min-h-0' : ''}`}
+        style={dragRegionStyle}
+      >
         {shouldShowHistory ? (
           <div
             ref={historyRef}
-            className="min-h-0 overflow-y-auto"
-            style={{
-              ...noDragRegionStyle,
-              maxHeight: historyViewportHeight ? `${historyViewportHeight}px` : undefined
-            }}
+            className={isHeightCapped ? 'min-h-0 flex-1 overflow-y-auto' : 'overflow-y-visible'}
+            style={noDragRegionStyle}
           >
-            <div ref={historyContentRef} className="px-3 pt-3">
-              <ChatMessages messages={chat.messages} bottomSpacerClassName="h-1" darkMode compact />
+            <div>
+              <div
+                className="sticky top-0 z-10 bg-[rgb(30,30,30)]/70 px-3 pb-2 pt-3"
+                style={noDragRegionStyle}
+              >
+                <button
+                  type="button"
+                  onClick={handleNewMessage}
+                  className="inline-flex rounded-full border border-white/10 px-2.5 py-1 text-[11px] font-medium text-white/70 transition hover:border-white/20 hover:text-white"
+                >
+                  + New message
+                </button>
+              </div>
+              <div className="px-3">
+                <ChatMessages messages={chat.messages} bottomSpacerClassName="h-1" darkMode compact />
+              </div>
             </div>
           </div>
         ) : null}
 
         <div
-          ref={composerRef}
-          className={`p-3 ${shouldShowHistory ? 'border-t border-white/6' : ''}`}
+          className={shouldShowHistory ? 'border-t border-white/6' : undefined}
           style={noDragRegionStyle}
         >
           <textarea
@@ -227,23 +230,6 @@ const WidgetWindow = ({ onRequestClose }: WidgetWindowProps): JSX.Element => {
             rows={1}
             className="max-h-48 w-full resize-none rounded-[18px] bg-black px-4 py-3 text-[14px] leading-6 text-white outline-none placeholder:text-white/28"
           />
-
-          {shouldShowHistory && (
-            <div className="mt-2 flex items-center justify-between gap-3 text-[10px] uppercase tracking-[0.16em] text-white/36">
-              <span>{isRunning ? 'Streaming' : 'Conversation'}</span>
-              {isRunning ? (
-                <button
-                  type="button"
-                  onClick={handleStop}
-                  className="rounded-full border border-white/10 px-2.5 py-1 text-white/72 transition hover:border-white/20 hover:text-white"
-                >
-                  Stop
-                </button>
-              ) : (
-                <span>Enter sends</span>
-              )}
-            </div>
-          )}
         </div>
       </section>
     </main>

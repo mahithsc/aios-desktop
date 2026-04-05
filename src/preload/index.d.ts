@@ -14,6 +14,8 @@ interface AppAPI {
   registerChildWindow: (registration: ChildWindowRegistration) => Promise<void>
   updateChildWindow: (update: ChildWindowUpdate) => void
   showChildWindow: (windowKey: string) => void
+  hideChildWindow: (windowKey: string) => void
+  getChildWindowMaxHeight: (windowKey: string) => Promise<number>
   uploadAttachments: (chatId: string, files: UploadAttachmentFile[]) => Promise<MessageAttachment[]>
   onSocketEvent: (listener: (event: WSEnvelope) => void) => () => void
   onToggleWidgetWindowRequested: (listener: () => void) => () => void

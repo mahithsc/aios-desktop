@@ -4,14 +4,15 @@ import ChildWindow from '../ChildWindow'
 import WidgetWindow from './WidgetWindow'
 
 type WidgetPortalProps = {
+  visible: boolean
   onClosed: () => void
 }
 
-const WidgetPortal = ({ onClosed }: WidgetPortalProps): ReactNode => {
+const WidgetPortal = ({ visible, onClosed }: WidgetPortalProps): ReactNode => {
   const registration = useMemo(() => createWidgetWindowRegistration(), [])
 
   return (
-    <ChildWindow registration={registration} onClosed={onClosed}>
+    <ChildWindow registration={registration} visible={visible} onClosed={onClosed}>
       <WidgetWindow onRequestClose={onClosed} />
     </ChildWindow>
   )

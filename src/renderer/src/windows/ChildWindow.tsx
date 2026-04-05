@@ -11,6 +11,7 @@ const MANAGED_STYLE_ATTR = 'data-aios-child-window-style'
 
 type ChildWindowProps = {
   registration: ChildWindowRegistration
+  visible: boolean
   onClosed: () => void
   children: ReactNode
 }
@@ -62,7 +63,7 @@ const syncStyles = (sourceDocument: Document, targetDocument: Document): (() => 
   }
 }
 
-const ChildWindow = ({ registration, onClosed, children }: ChildWindowProps): ReactNode => {
+const ChildWindow = ({ registration, visible, onClosed, children }: ChildWindowProps): ReactNode => {
   const childWindowRef = useRef<Window | null>(null)
   const cleanupRef = useRef<(() => void) | null>(null)
   const isUnmountingRef = useRef(false)
@@ -72,6 +73,15 @@ const ChildWindow = ({ registration, onClosed, children }: ChildWindowProps): Re
     let isCancelled = false
 
     const openChildWindow = async (): Promise<void> => {
+      if (!visible) {
+        return
+      }
+
+      const existingChildWindow = childWindowRef.current
+      if (existingChildWindow && !existingChildWindow.closed) {
+        return
+      }
+
       await window.api.registerChildWindow(registration)
       if (isCancelled) {
         return
@@ -97,6 +107,10 @@ const ChildWindow = ({ registration, onClosed, children }: ChildWindowProps): Re
           return
         }
 
+        cleanupRef.current?.()
+        cleanupRef.current = null
+        childWindowRef.current = null
+        setPortalContainer(null)
         onClosed()
       }
 
@@ -116,12 +130,18 @@ const ChildWindow = ({ registration, onClosed, children }: ChildWindowProps): Re
 
     return () => {
       isCancelled = true
+    }
+  }, [onClosed, registration, visible])
+
+  useEffect(() => {
+    return () => {
       isUnmountingRef.current = true
       cleanupRef.current?.()
       cleanupRef.current = null
 
       const childWindow = childWindowRef.current
       childWindowRef.current = null
+      setPortalContainer(null)
 
       if (childWindow && !childWindow.closed) {
         childWindow.close()
@@ -129,7 +149,7 @@ const ChildWindow = ({ registration, onClosed, children }: ChildWindowProps): Re
 
       isUnmountingRef.current = false
     }
-  }, [onClosed, registration])
+  }, [])
 
   useEffect(() => {
     const childWindow = childWindowRef.current
@@ -155,13 +175,18 @@ const ChildWindow = ({ registration, onClosed, children }: ChildWindowProps): Re
     }
 
     const frameId = window.requestAnimationFrame(() => {
-      window.api.showChildWindow(registration.windowKey)
+      if (visible) {
+        window.api.showChildWindow(registration.windowKey)
+        return
+      }
+
+      window.api.hideChildWindow(registration.windowKey)
     })
 
     return () => {
       window.cancelAnimationFrame(frameId)
     }
-  }, [portalContainer, registration.windowKey])
+  }, [portalContainer, registration.windowKey, visible])
 
   if (!portalContainer) {
     return null

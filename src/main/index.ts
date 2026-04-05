@@ -11,7 +11,9 @@ import {
   type ChildWindowRegistration,
   type ChildWindowUpdate,
   WIDGET_SHORTCUT,
+  WIDGET_WINDOW_MAX_HEIGHT_RATIO,
   WIDGET_WINDOW_KEY,
+  WIDGET_WINDOW_MIN_HEIGHT,
   WIDGET_WINDOW_TOP_OFFSET
 } from '../shared/window'
 
@@ -43,21 +45,74 @@ const getUploadErrorMessage = async (response: Response): Promise<string> => {
   return response.statusText || 'Attachment upload failed.'
 }
 
-const getDefaultWidgetBounds = (bounds: ChildWindowBounds): Electron.Rectangle => {
-  const display = screen.getPrimaryDisplay()
-  const { x, y, width } = display.workArea
+const clamp = (value: number, min: number, max: number): number => Math.min(Math.max(value, min), max)
+
+const getWidgetDisplay = (childWindow?: BrowserWindow): Electron.Display => {
+  if (childWindow && !childWindow.isDestroyed()) {
+    return screen.getDisplayMatching(childWindow.getBounds())
+  }
+
+  return screen.getDisplayNearestPoint(screen.getCursorScreenPoint())
+}
+
+const getMaxWidgetHeightForDisplay = (display: Electron.Display): number =>
+  Math.max(
+    WIDGET_WINDOW_MIN_HEIGHT,
+    Math.floor(display.workArea.height * WIDGET_WINDOW_MAX_HEIGHT_RATIO)
+  )
+
+const resizeWidgetWindowToPreferredHeight = (
+  childWindow: BrowserWindow,
+  preferredHeight: number
+): void => {
+  const currentBounds = childWindow.getBounds()
+  const display = getWidgetDisplay(childWindow)
+  const nextBounds = getWidgetBoundsForDisplay(
+    {
+      width: currentBounds.width,
+      height: preferredHeight
+    },
+    display,
+    currentBounds
+  )
+
+  if (
+    nextBounds.x === currentBounds.x &&
+    nextBounds.y === currentBounds.y &&
+    nextBounds.width === currentBounds.width &&
+    nextBounds.height === currentBounds.height
+  ) {
+    return
+  }
+
+  childWindow.setBounds(nextBounds, false)
+}
+
+const getWidgetBoundsForDisplay = (
+  bounds: ChildWindowBounds,
+  display: Electron.Display,
+  currentBounds?: Electron.Rectangle
+): Electron.Rectangle => {
+  const workArea = display.workArea
+  const width = Math.min(bounds.width, workArea.width)
+  const height = Math.min(bounds.height, getMaxWidgetHeightForDisplay(display))
+  const defaultX = Math.round(workArea.x + (workArea.width - width) / 2)
+  const defaultY = Math.min(workArea.y + WIDGET_WINDOW_TOP_OFFSET, workArea.y + workArea.height - height)
+  const maxX = workArea.x + workArea.width - width
+  const maxY = workArea.y + workArea.height - height
 
   return {
-    x: Math.round(x + (width - bounds.width) / 2),
-    y: y + WIDGET_WINDOW_TOP_OFFSET,
-    width: bounds.width,
-    height: bounds.height
+    x: clamp(currentBounds?.x ?? defaultX, workArea.x, maxX),
+    y: clamp(currentBounds?.y ?? defaultY, workArea.y, maxY),
+    width,
+    height
   }
 }
 
 const resolveChildWindowBounds = (
   windowKey: string,
-  bounds: ChildWindowBounds
+  bounds: ChildWindowBounds,
+  childWindow?: BrowserWindow
 ): Electron.Rectangle => {
   if (bounds.x !== undefined && bounds.y !== undefined) {
     return {
@@ -69,7 +124,7 @@ const resolveChildWindowBounds = (
   }
 
   if (windowKey === WIDGET_WINDOW_KEY) {
-    return getDefaultWidgetBounds(bounds)
+    return getWidgetBoundsForDisplay(bounds, getWidgetDisplay(childWindow), childWindow?.getBounds())
   }
 
   return {
@@ -88,6 +143,10 @@ const toChildWindowOptions = (
   return {
     ...sharedWindowOptions,
     ...bounds,
+    webPreferences: {
+      ...sharedWindowOptions.webPreferences,
+      enablePreferredSizeMode: registration.windowKey === WIDGET_WINDOW_KEY
+    },
     title: registration.title,
     show: false,
     frame: registration.options.frame,
@@ -113,7 +172,7 @@ const applyChildWindowRegistration = (
   childWindow: BrowserWindow,
   registration: ChildWindowRegistration
 ): void => {
-  const bounds = resolveChildWindowBounds(registration.windowKey, registration.options.bounds)
+  const bounds = resolveChildWindowBounds(registration.windowKey, registration.options.bounds, childWindow)
 
   childWindow.setTitle(registration.title)
   childWindow.setBounds(bounds, false)
@@ -223,6 +282,12 @@ app.whenReady().then(() => {
           shell.openExternal(windowDetails.url)
           return { action: 'deny' }
         })
+
+        if (childWindowKey === WIDGET_WINDOW_KEY) {
+          childWindow.webContents.on('preferred-size-changed', (_event, preferredSize) => {
+            resizeWidgetWindowToPreferredHeight(childWindow, preferredSize.height)
+          })
+        }
 
         const registration = childWindowRegistrations.get(childWindowKey)
         if (registration) {
@@ -358,15 +423,38 @@ app.whenReady().then(() => {
     }
   })
 
+  ipcMain.handle('renderer:get-child-window-max-height', async (_event, windowKey: string): Promise<number> => {
+    if (windowKey !== WIDGET_WINDOW_KEY) {
+      return WIDGET_WINDOW_MIN_HEIGHT
+    }
+
+    const childWindow = childWindows.get(windowKey)
+    return getMaxWidgetHeightForDisplay(getWidgetDisplay(childWindow))
+  })
+
   ipcMain.on('renderer:show-child-window', (_event, windowKey: string) => {
     const childWindow = childWindows.get(windowKey)
     if (!childWindow || childWindow.isDestroyed()) {
       return
     }
 
+    const registration = childWindowRegistrations.get(windowKey)
+    if (registration) {
+      applyChildWindowRegistration(childWindow, registration)
+    }
+
     childWindow.show()
     app.focus({ steal: true })
     childWindow.focus()
+  })
+
+  ipcMain.on('renderer:hide-child-window', (_event, windowKey: string) => {
+    const childWindow = childWindows.get(windowKey)
+    if (!childWindow || childWindow.isDestroyed()) {
+      return
+    }
+
+    childWindow.hide()
   })
 
   ipcMain.handle(

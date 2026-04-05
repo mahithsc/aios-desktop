@@ -4,18 +4,18 @@ import WidgetPortal from '@renderer/windows/widget/WidgetPortal'
 import SocketSyncProvider from './providers/SocketSyncProvider'
 
 const App = (): JSX.Element => {
-  const [isWidgetOpen, setIsWidgetOpen] = useState(false)
+  const [isWidgetVisible, setIsWidgetVisible] = useState(false)
 
   useEffect(() => {
     return window.api.onToggleWidgetWindowRequested(() => {
-      setIsWidgetOpen((current) => !current)
+      setIsWidgetVisible((current) => !current)
     })
   }, [])
 
   return (
     <SocketSyncProvider>
       <MainWindow />
-      {isWidgetOpen ? <WidgetPortal onClosed={() => setIsWidgetOpen(false)} /> : null}
+      <WidgetPortal visible={isWidgetVisible} onClosed={() => setIsWidgetVisible(false)} />
     </SocketSyncProvider>
   )
 }

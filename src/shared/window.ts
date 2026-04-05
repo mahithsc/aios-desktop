@@ -49,7 +49,7 @@ export interface ChildWindowUpdate {
 
 export const WIDGET_WINDOW_WIDTH = 560
 export const WIDGET_WINDOW_MIN_HEIGHT = 92
-export const WIDGET_WINDOW_MAX_HEIGHT_RATIO = 0.75
+export const WIDGET_WINDOW_MAX_HEIGHT_RATIO = 0.9
 export const WIDGET_WINDOW_TOP_OFFSET = 72
 
 export const getChildWindowName = (windowKey: string): string =>

@@ -19,6 +19,9 @@ const api = {
   updateChildWindow: (update: ChildWindowUpdate) =>
     ipcRenderer.send('renderer:update-child-window', update),
   showChildWindow: (windowKey: string) => ipcRenderer.send('renderer:show-child-window', windowKey),
+  hideChildWindow: (windowKey: string) => ipcRenderer.send('renderer:hide-child-window', windowKey),
+  getChildWindowMaxHeight: (windowKey: string): Promise<number> =>
+    ipcRenderer.invoke('renderer:get-child-window-max-height', windowKey),
   uploadAttachments: (
     chatId: string,
     files: UploadAttachmentFile[]
