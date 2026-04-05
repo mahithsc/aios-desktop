@@ -11,6 +11,7 @@ import {
   WIDGET_SHORTCUT,
   WIDGET_WINDOW_MAX_HEIGHT_RATIO,
   WIDGET_WINDOW_MIN_HEIGHT,
+  WIDGET_WINDOW_TOP_DRAG_BOUND,
   WIDGET_WINDOW_TOP_OFFSET,
   WIDGET_WINDOW_WIDTH
 } from '../shared/window'
@@ -26,6 +27,11 @@ type UploadAttachmentFile = {
 type UploadAttachmentsPayload = {
   chatId: string
   files: UploadAttachmentFile[]
+}
+
+type WidgetPosition = {
+  x: number
+  y: number
 }
 
 const getUploadErrorMessage = async (response: Response): Promise<string> => {
@@ -77,6 +83,24 @@ const getWidgetBoundsForDisplay = (
   }
 }
 
+const getDraggedWidgetBoundsForDisplay = (
+  bounds: Pick<Electron.Rectangle, 'width' | 'height'>,
+  display: Electron.Display,
+  currentBounds: Pick<Electron.Rectangle, 'x' | 'y'>
+): Electron.Rectangle => {
+  const workArea = display.workArea
+  const width = Math.min(bounds.width, workArea.width)
+  const height = Math.min(bounds.height, getMaxWidgetHeightForDisplay(display))
+  const minY = workArea.y + WIDGET_WINDOW_TOP_DRAG_BOUND
+
+  return {
+    x: currentBounds.x,
+    y: Math.max(currentBounds.y, minY),
+    width,
+    height
+  }
+}
+
 const resizeWidgetWindowToPreferredHeight = (
   targetWindow: BrowserWindow,
   preferredHeight: number
@@ -107,6 +131,7 @@ const resizeWidgetWindowToPreferredHeight = (
 app.whenReady().then(() => {
   let mainWindow: BrowserWindow | null = null
   let widgetWindow: BrowserWindow | null = null
+  let lastWidgetPosition: WidgetPosition | null = null
 
   const ensureMainWindow = (): BrowserWindow => {
     if (mainWindow?.isDestroyed()) {
@@ -156,6 +181,15 @@ app.whenReady().then(() => {
         resizeWidgetWindowToPreferredHeight(widgetWindow, preferredSize.height)
       })
 
+      widgetWindow.on('move', () => {
+        if (!widgetWindow || widgetWindow.isDestroyed()) {
+          return
+        }
+
+        const { x, y } = widgetWindow.getBounds()
+        lastWidgetPosition = { x, y }
+      })
+
       widgetWindow.on('closed', () => {
         widgetWindow = null
       })
@@ -166,15 +200,24 @@ app.whenReady().then(() => {
 
   const showWidgetWindow = (): void => {
     const targetWidgetWindow = ensureWidgetWindow()
-    const display = screen.getDisplayNearestPoint(screen.getCursorScreenPoint())
     const currentBounds = targetWidgetWindow.getBounds()
-    const nextBounds = getWidgetBoundsForDisplay(
-      {
-        width: currentBounds.width,
-        height: currentBounds.height
-      },
-      display
-    )
+    const nextBounds = lastWidgetPosition
+      ? getDraggedWidgetBoundsForDisplay(
+          {
+            width: currentBounds.width,
+            height: currentBounds.height
+          },
+          screen.getDisplayNearestPoint(lastWidgetPosition),
+          lastWidgetPosition
+        )
+      : getWidgetBoundsForDisplay(
+          {
+            width: currentBounds.width,
+            height: currentBounds.height
+          },
+          screen.getDisplayMatching(currentBounds),
+          currentBounds
+        )
 
     targetWidgetWindow.setBounds(nextBounds, false)
 
@@ -278,6 +321,30 @@ app.whenReady().then(() => {
 
   ipcMain.on('renderer:toggle-widget-window', () => {
     toggleWidgetWindow()
+  })
+
+  ipcMain.on('renderer:move-widget-window', (_event, position: WidgetPosition) => {
+    if (!widgetWindow || widgetWindow.isDestroyed()) {
+      return
+    }
+
+    const currentBounds = widgetWindow.getBounds()
+    const display = screen.getDisplayNearestPoint(position)
+    const nextBounds = getDraggedWidgetBoundsForDisplay(
+      {
+        width: currentBounds.width,
+        height: currentBounds.height
+      },
+      display,
+      position
+    )
+
+    lastWidgetPosition = {
+      x: nextBounds.x,
+      y: nextBounds.y
+    }
+
+    widgetWindow.setBounds(nextBounds, false)
   })
 
   ipcMain.handle('renderer:get-widget-max-height', async () => {

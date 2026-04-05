@@ -9,6 +9,11 @@ type UploadAttachmentFile = {
   bytes: ArrayBuffer
 }
 
+type WidgetPosition = {
+  x: number
+  y: number
+}
+
 // Custom APIs for renderer
 const api = {
   sendSocketMessage: (message: WSEnvelope) =>
@@ -16,6 +21,7 @@ const api = {
   showWidgetWindow: () => ipcRenderer.send('renderer:show-widget-window'),
   hideWidgetWindow: () => ipcRenderer.send('renderer:hide-widget-window'),
   toggleWidgetWindow: () => ipcRenderer.send('renderer:toggle-widget-window'),
+  moveWidgetWindow: (position: WidgetPosition) => ipcRenderer.send('renderer:move-widget-window', position),
   getWidgetMaxHeight: (): Promise<number> => ipcRenderer.invoke('renderer:get-widget-max-height'),
   uploadAttachments: (
     chatId: string,

@@ -12,8 +12,8 @@ import { useChatAttachments } from '../../lib/chatAttachments'
 import { useChatStore } from '../../store/useChatSessionStore'
 import { useInputStore } from '../../store/useInputStore'
 
-const dragRegionStyle = { WebkitAppRegion: 'drag' } as CSSProperties
 const noDragRegionStyle = { WebkitAppRegion: 'no-drag' } as CSSProperties
+const WIDGET_DRAG_THRESHOLD_PX = 6
 
 type WidgetWindowProps = {
   onRequestClose: () => void
@@ -82,11 +82,23 @@ const AttachmentChip = ({
   </div>
 )
 
+type WidgetDragState = {
+  pointerId: number
+  startPointerX: number
+  startPointerY: number
+  startWindowX: number
+  startWindowY: number
+  didDrag: boolean
+  focusOnRelease: boolean
+}
+
 const WidgetWindow = ({ onRequestClose }: WidgetWindowProps): JSX.Element => {
   const widgetRef = useRef<HTMLElement | null>(null)
   const historyRef = useRef<HTMLDivElement | null>(null)
   const textareaRef = useRef<HTMLTextAreaElement | null>(null)
   const fileInputRef = useRef<HTMLInputElement | null>(null)
+  const dragStateRef = useRef<WidgetDragState | null>(null)
+  const suppressNextClickRef = useRef(false)
   const value = useInputStore((state) => state.value)
   const setValue = useInputStore((state) => state.setValue)
   const clearValue = useInputStore((state) => state.clearValue)
@@ -123,6 +135,13 @@ const WidgetWindow = ({ onRequestClose }: WidgetWindowProps): JSX.Element => {
     textarea.style.height = 'auto'
     textarea.style.height = `${Math.min(textarea.scrollHeight, 192)}px`
   }, [value])
+
+  useEffect(() => {
+    return () => {
+      document.body.style.userSelect = ''
+      document.body.style.cursor = ''
+    }
+  }, [])
 
   useEffect(() => {
     let isCancelled = false
@@ -290,13 +309,128 @@ const WidgetWindow = ({ onRequestClose }: WidgetWindowProps): JSX.Element => {
     handleSubmit()
   }
 
+  const clearWidgetDragState = (): void => {
+    dragStateRef.current = null
+    document.body.style.userSelect = ''
+    document.body.style.cursor = ''
+  }
+
+  const moveWidgetTo = (nextX: number, nextY: number): void => {
+    window.api.moveWidgetWindow({
+      x: nextX,
+      y: nextY
+    })
+  }
+
+  const beginCollapsedDrag = (
+    event: React.PointerEvent<HTMLDivElement>,
+    focusOnRelease: boolean
+  ): void => {
+    if (event.button !== 0) {
+      return
+    }
+
+    const target = event.target
+    if (
+      target instanceof HTMLElement &&
+      target.closest('button, input[type="file"], [data-widget-drag-exempt="true"]')
+    ) {
+      return
+    }
+
+    dragStateRef.current = {
+      pointerId: event.pointerId,
+      startPointerX: event.screenX,
+      startPointerY: event.screenY,
+      startWindowX: window.screenX,
+      startWindowY: window.screenY,
+      didDrag: false,
+      focusOnRelease
+    }
+
+    event.currentTarget.setPointerCapture(event.pointerId)
+  }
+
+  const handleCollapsedComposerPointerMove = (event: React.PointerEvent<HTMLDivElement>): void => {
+    const dragState = dragStateRef.current
+    if (!dragState || dragState.pointerId !== event.pointerId) {
+      return
+    }
+
+    const deltaX = event.screenX - dragState.startPointerX
+    const deltaY = event.screenY - dragState.startPointerY
+
+    if (!dragState.didDrag) {
+      const movedFarEnough =
+        Math.abs(deltaX) >= WIDGET_DRAG_THRESHOLD_PX || Math.abs(deltaY) >= WIDGET_DRAG_THRESHOLD_PX
+
+      if (!movedFarEnough) {
+        return
+      }
+
+      dragState.didDrag = true
+      suppressNextClickRef.current = true
+      document.body.style.userSelect = 'none'
+      document.body.style.cursor = 'grabbing'
+      textareaRef.current?.blur()
+    }
+
+    event.preventDefault()
+    moveWidgetTo(dragState.startWindowX + deltaX, dragState.startWindowY + deltaY)
+  }
+
+  const handleCollapsedComposerPointerEnd = (event: React.PointerEvent<HTMLDivElement>): void => {
+    const dragState = dragStateRef.current
+    if (!dragState || dragState.pointerId !== event.pointerId) {
+      return
+    }
+
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId)
+    }
+
+    const shouldFocusTextarea = dragState.focusOnRelease && !dragState.didDrag
+    const shouldResetSuppressedClick = dragState.didDrag
+    clearWidgetDragState()
+
+    if (shouldResetSuppressedClick) {
+      window.requestAnimationFrame(() => {
+        suppressNextClickRef.current = false
+      })
+    }
+
+    if (shouldFocusTextarea) {
+      textareaRef.current?.focus()
+    }
+  }
+
+  const handleCollapsedComposerClickCapture = (event: React.MouseEvent<HTMLDivElement>): void => {
+    if (!suppressNextClickRef.current) {
+      return
+    }
+
+    suppressNextClickRef.current = false
+    event.preventDefault()
+    event.stopPropagation()
+  }
+
   return (
     <main className={`mx-auto w-[90%] text-foreground ${isHeightCapped ? 'h-screen' : ''}`}>
       <section
         ref={widgetRef}
         className={`relative flex w-full flex-col overflow-hidden rounded-[18px] bg-[rgb(24,24,24)]/82 ${isHeightCapped ? 'h-full min-h-0' : ''}`}
-        style={dragRegionStyle}
       >
+        {shouldShowHistory ? (
+          <div
+            className="absolute inset-x-0 top-0 z-10 h-8 cursor-grab"
+            onPointerDown={(event) => beginCollapsedDrag(event, true)}
+            onPointerMove={handleCollapsedComposerPointerMove}
+            onPointerUp={handleCollapsedComposerPointerEnd}
+            onPointerCancel={handleCollapsedComposerPointerEnd}
+            onClickCapture={handleCollapsedComposerClickCapture}
+          />
+        ) : null}
+
         {shouldShowHistory ? (
           <div
             ref={historyRef}
@@ -313,7 +447,16 @@ const WidgetWindow = ({ onRequestClose }: WidgetWindowProps): JSX.Element => {
           className={shouldShowHistory ? 'border-t border-white/6' : undefined}
           style={noDragRegionStyle}
         >
-          <div className="rounded-[18px] bg-black">
+          <div
+            className="rounded-[18px] bg-black"
+            onPointerDown={
+              shouldShowHistory ? undefined : (event) => beginCollapsedDrag(event, true)
+            }
+            onPointerMove={shouldShowHistory ? undefined : handleCollapsedComposerPointerMove}
+            onPointerUp={shouldShowHistory ? undefined : handleCollapsedComposerPointerEnd}
+            onPointerCancel={shouldShowHistory ? undefined : handleCollapsedComposerPointerEnd}
+            onClickCapture={shouldShowHistory ? undefined : handleCollapsedComposerClickCapture}
+          >
             <input
               ref={fileInputRef}
               type="file"
@@ -332,6 +475,7 @@ const WidgetWindow = ({ onRequestClose }: WidgetWindowProps): JSX.Element => {
               placeholder="Message Aios..."
               autoFocus
               rows={1}
+              data-widget-drag-exempt={shouldShowHistory ? 'true' : undefined}
               className="block max-h-48 w-full resize-none bg-transparent px-4 pt-3 text-[14px] leading-6 text-white outline-none placeholder:text-white/28"
             />
 

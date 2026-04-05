@@ -8,11 +8,17 @@ interface UploadAttachmentFile {
   bytes: ArrayBuffer
 }
 
+interface WidgetPosition {
+  x: number
+  y: number
+}
+
 interface AppAPI {
   sendSocketMessage: (message: WSEnvelope) => void
   showWidgetWindow: () => void
   hideWidgetWindow: () => void
   toggleWidgetWindow: () => void
+  moveWidgetWindow: (position: WidgetPosition) => void
   getWidgetMaxHeight: () => Promise<number>
   uploadAttachments: (chatId: string, files: UploadAttachmentFile[]) => Promise<MessageAttachment[]>
   onSocketEvent: (listener: (event: WSEnvelope) => void) => () => void
