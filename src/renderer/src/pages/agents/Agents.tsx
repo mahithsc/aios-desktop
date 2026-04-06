@@ -5,17 +5,16 @@ import {
   useRef,
   useState,
   type JSX,
-  type KeyboardEvent,
   type MouseEvent as ReactMouseEvent
 } from 'react'
+import { useChatComposer } from '../../hooks/useChatComposer'
+import { useTypeToFocus } from '../../hooks/useTypeToFocus'
 import { useChatStore } from '../../store/useChatSessionStore'
 import { useAssistantStore } from '../../store/useAssistantStore'
 import { useCanvasStore } from '../../store/useCanvasStore'
-import { useInputStore } from '../../store/useInputStore'
 import CanvasPanel from '../../components/CanvasPanel'
 import ChatMessages from '../../components/ChatMessages'
-import ChatComposer from './components/ChatComposer'
-import { useChatAttachments } from '../../lib/chatAttachments'
+import AgentComposer from './components/AgentComposer'
 import { useFileDropTarget } from '../../lib/fileDropTarget'
 
 const formatTimestamp = (timestamp: number): string =>
@@ -86,18 +85,26 @@ const ChatHistoryItem = ({
 
 const Agents = (): JSX.Element => {
   const contentRef = useRef<HTMLElement | null>(null)
-  const value = useInputStore((state) => state.value)
-  const setValue = useInputStore((state) => state.setValue)
-  const clearValue = useInputStore((state) => state.clearValue)
-  const chat = useChatStore((state) => state.chat)
   const chatHistory = useChatStore((state) => state.chatHistory)
   const newChat = useChatStore((state) => state.newChat)
   const assistantsByChatId = useAssistantStore((state) => state.assistantsByChatId)
-  const addUserMessage = useChatStore((state) => state.addUserMessage)
-  const createAssistantMessageStub = useChatStore((state) => state.createAssistantMessageStub)
+  const {
+    attachments,
+    canStop,
+    chat,
+    handleKeyDown,
+    handleStop,
+    handleSubmit,
+    isRunning,
+    isUploading,
+    removeAttachment,
+    setValue,
+    uploadError,
+    uploadFiles,
+    value
+  } = useChatComposer()
+  const { handleFocusReady } = useTypeToFocus({ setValue })
   const canvasArtifact = useCanvasStore((state) => state.artifactsByChatId[chat.id])
-  const { attachments, clearAttachments, isUploading, removeAttachment, uploadError, uploadFiles } =
-    useChatAttachments(chat.id)
   const { isDragActive, onDragEnter, onDragLeave, onDragOver, onDrop } = useFileDropTarget({
     disabled: isUploading,
     onFilesDropped: uploadFiles
@@ -109,19 +116,6 @@ const Agents = (): JSX.Element => {
   )
   const [canvasWidth, setCanvasWidth] = useState(480)
   const [isResizingCanvas, setIsResizingCanvas] = useState(false)
-  const activeRunId = useMemo(() => {
-    const activeMessage = [...chat.messages]
-      .reverse()
-      .find(
-        (message) =>
-          message.role === 'assistant' &&
-          (message.status === 'pending' || message.status === 'streaming') &&
-          !!message.runId
-      )
-
-    return activeMessage?.role === 'assistant' ? (activeMessage.runId ?? null) : null
-  }, [chat.messages])
-  const isRunning = chat.status === 'streaming'
 
   useEffect(() => {
     console.debug('[canvas]', 'Agents page selected canvas artifact changed.', {
@@ -135,54 +129,6 @@ const Agents = (): JSX.Element => {
       knownCanvasChatIds: Object.keys(useCanvasStore.getState().artifactsByChatId)
     })
   }, [canvasArtifact, chat.id])
-
-  const handleSubmit = (): void => {
-    if (isRunning) {
-      return
-    }
-
-    const nextValue = value.trim()
-
-    if (!nextValue && attachments.length === 0) {
-      return
-    }
-
-    const turnId = crypto.randomUUID()
-    addUserMessage({ content: nextValue, attachments })
-    const nextChat = useChatStore.getState().chat
-    createAssistantMessageStub(turnId)
-    window.api.sendSocketMessage({
-      type: 'chat.submit',
-      data: {
-        chat: nextChat,
-        turnId
-      }
-    })
-    clearValue()
-    clearAttachments()
-  }
-
-  const handleStop = (): void => {
-    if (!activeRunId) {
-      return
-    }
-
-    window.api.sendSocketMessage({
-      type: 'run.stop',
-      data: {
-        runId: activeRunId
-      }
-    })
-  }
-
-  const handleKeyDown = (event: KeyboardEvent<HTMLInputElement | HTMLTextAreaElement>): void => {
-    if (event.key !== 'Enter' || event.nativeEvent.isComposing || event.shiftKey) {
-      return
-    }
-
-    event.preventDefault()
-    handleSubmit()
-  }
 
   const handleLoadChat = (chatId: string): void => {
     window.api.sendSocketMessage({
@@ -313,7 +259,7 @@ const Agents = (): JSX.Element => {
           <div className="absolute inset-x-0 bottom-0">
             <div className="pointer-events-none absolute inset-x-0 bottom-0 z-0 h-14 bg-background sm:h-16" />
             <div className="relative z-10 mx-auto w-full max-w-184 px-4 pb-4 sm:px-6 sm:pb-6">
-              <ChatComposer
+              <AgentComposer
                 value={value}
                 onChange={setValue}
                 onKeyDown={handleKeyDown}
@@ -322,11 +268,12 @@ const Agents = (): JSX.Element => {
                 attachments={attachments}
                 isUploading={isUploading}
                 isRunning={isRunning}
-                canStop={Boolean(activeRunId)}
+                canStop={canStop}
                 onFilesSelected={uploadFiles}
                 onRemoveAttachment={removeAttachment}
                 uploadError={uploadError}
                 fixed={false}
+                onFocusReady={handleFocusReady}
               />
             </div>
           </div>

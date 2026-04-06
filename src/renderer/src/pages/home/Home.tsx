@@ -1,19 +1,19 @@
 import type { CanvasArtifact, ChatCanvasArtifact } from 'src/shared/canvas'
 import type { ChatMetadata } from 'src/shared/chat'
 import { AppWindow, FileCode2, ImageIcon, Video } from 'lucide-react'
-import { useMemo, type JSX, type KeyboardEvent } from 'react'
+import { useMemo, type JSX } from 'react'
+import { useFileDropTarget } from '../../lib/fileDropTarget'
+import { useChatComposer } from '../../hooks/useChatComposer'
+import { useTypeToFocus } from '../../hooks/useTypeToFocus'
 import { useChatStore } from '../../store/useChatSessionStore'
 import { useCanvasStore } from '../../store/useCanvasStore'
 import { useCronStore } from '../../store/useCronStore'
 import { useHeartbeatStore } from '../../store/useHeartbeatStore'
-import { useInputStore } from '../../store/useInputStore'
 import { useNotificationStore } from '../../store/useNotificationStore'
-import ChatComposer from '../agents/components/ChatComposer'
 import HeartbeatCard from './components/HeartbeatCard'
+import HomeHeroComposer from './components/HomeHeroComposer'
 import NotificationCard from './components/NotificationCard'
 import UpcomingCronCard from './components/UpcomingCronCard'
-import { useChatAttachments } from '../../lib/chatAttachments'
-import { useFileDropTarget } from '../../lib/fileDropTarget'
 
 const formatTimestamp = (timestamp: number): string =>
   new Intl.DateTimeFormat(undefined, {
@@ -170,13 +170,7 @@ type HomeProps = {
 }
 
 const Home = ({ onOpenAgents, onOpenHeartbeats }: HomeProps): JSX.Element => {
-  const value = useInputStore((state) => state.value)
-  const setValue = useInputStore((state) => state.setValue)
-  const clearValue = useInputStore((state) => state.clearValue)
-  const chat = useChatStore((state) => state.chat)
-  const addUserMessage = useChatStore((state) => state.addUserMessage)
   const chatHistory = useChatStore((state) => state.chatHistory)
-  const createAssistantMessageStub = useChatStore((state) => state.createAssistantMessageStub)
   const canvasArtifactsByChatId = useCanvasStore((state) => state.artifactsByChatId)
   const upcomingCrons = useCronStore((state) => state.upcomingCrons)
   const activeHeartbeatRunId = useHeartbeatStore((state) => state.activeRunId)
@@ -184,8 +178,22 @@ const Home = ({ onOpenAgents, onOpenHeartbeats }: HomeProps): JSX.Element => {
   const heartbeatRunsById = useHeartbeatStore((state) => state.runsById)
   const notifications = useNotificationStore((state) => state.notifications)
   const dismissNotification = useNotificationStore((state) => state.dismissNotification)
-  const { attachments, clearAttachments, isUploading, removeAttachment, uploadError, uploadFiles } =
-    useChatAttachments(chat.id)
+  const {
+    attachments,
+    canStop,
+    handleKeyDown,
+    handleStop,
+    isRunning,
+    isUploading,
+    removeAttachment,
+    setValue,
+    uploadError,
+    uploadFiles,
+    value
+  } = useChatComposer({
+    onSubmitted: onOpenAgents
+  })
+  const { handleFocusReady } = useTypeToFocus({ setValue })
   const { isDragActive, onDragEnter, onDragLeave, onDragOver, onDrop } = useFileDropTarget({
     disabled: isUploading,
     onFilesDropped: uploadFiles
@@ -203,70 +211,10 @@ const Home = ({ onOpenAgents, onOpenHeartbeats }: HomeProps): JSX.Element => {
     [chatHistory]
   )
   const visibleUpcomingCrons = useMemo(() => upcomingCrons.slice(0, 6), [upcomingCrons])
-  const activeHeartbeat = activeHeartbeatRunId ? heartbeatRunsById[activeHeartbeatRunId] ?? null : null
-  const lastHeartbeat = lastHeartbeatRunId ? heartbeatRunsById[lastHeartbeatRunId] ?? null : null
-  const activeRunId = useMemo(() => {
-    const activeMessage = [...chat.messages]
-      .reverse()
-      .find(
-        (message) =>
-          message.role === 'assistant' &&
-          (message.status === 'pending' || message.status === 'streaming') &&
-          !!message.runId
-      )
-
-    return activeMessage?.role === 'assistant' ? (activeMessage.runId ?? null) : null
-  }, [chat.messages])
-  const isRunning = chat.status === 'streaming'
-
-  const handleSubmit = (): void => {
-    if (isRunning) {
-      return
-    }
-
-    const nextValue = value.trim()
-
-    if (!nextValue && attachments.length === 0) {
-      return
-    }
-
-    const turnId = crypto.randomUUID()
-    addUserMessage({ content: nextValue, attachments })
-    const nextChat = useChatStore.getState().chat
-    createAssistantMessageStub(turnId)
-    window.api.sendSocketMessage({
-      type: 'chat.submit',
-      data: {
-        chat: nextChat,
-        turnId
-      }
-    })
-    clearValue()
-    clearAttachments()
-    onOpenAgents()
-  }
-
-  const handleStop = (): void => {
-    if (!activeRunId) {
-      return
-    }
-
-    window.api.sendSocketMessage({
-      type: 'run.stop',
-      data: {
-        runId: activeRunId
-      }
-    })
-  }
-
-  const handleKeyDown = (event: KeyboardEvent<HTMLInputElement | HTMLTextAreaElement>): void => {
-    if (event.key !== 'Enter' || event.nativeEvent.isComposing || event.shiftKey) {
-      return
-    }
-
-    event.preventDefault()
-    handleSubmit()
-  }
+  const activeHeartbeat = activeHeartbeatRunId
+    ? (heartbeatRunsById[activeHeartbeatRunId] ?? null)
+    : null
+  const lastHeartbeat = lastHeartbeatRunId ? (heartbeatRunsById[lastHeartbeatRunId] ?? null) : null
 
   const handleLoadChat = (chatId: string): void => {
     window.api.sendSocketMessage({
@@ -304,29 +252,28 @@ const Home = ({ onOpenAgents, onOpenHeartbeats }: HomeProps): JSX.Element => {
         </div>
       ) : null}
 
-      <div className="mx-auto flex w-full max-w-3xl flex-col items-center gap-8">
-        <div className="text-center">
-          <h1 className="text-lg tracking-tight text-foreground sm:text-2xl">
-            Hi, Mahith what are you working on
-          </h1>
-        </div>
-
-        <ChatComposer
-          value={value}
-          onChange={setValue}
-          onKeyDown={handleKeyDown}
-          onSubmit={handleSubmit}
-          onStop={handleStop}
-          attachments={attachments}
-          isUploading={isUploading}
-          isRunning={isRunning}
-          canStop={Boolean(activeRunId)}
-          onFilesSelected={uploadFiles}
-          onRemoveAttachment={removeAttachment}
-          uploadError={uploadError}
-          fixed={false}
-          placeholder="Ask anything"
-        />
+      <div className="mx-auto flex w-full max-w-5xl flex-col items-center gap-10 px-4 pb-10 pt-6 sm:px-6 sm:pt-10">
+        <section className="w-full max-w-4xl py-8 sm:py-14">
+          <h1 className="sr-only">Start a conversation</h1>
+          <p className="mb-5 text-sm font-medium text-muted-foreground sm:text-base">
+            Hi there, Mahith
+          </p>
+          <HomeHeroComposer
+            value={value}
+            onChange={setValue}
+            onKeyDown={handleKeyDown}
+            onStop={handleStop}
+            attachments={attachments}
+            isUploading={isUploading}
+            isRunning={isRunning}
+            canStop={canStop}
+            onRemoveAttachment={removeAttachment}
+            uploadError={uploadError}
+            placeholder="Ask your computer"
+            autoFocus
+            onFocusReady={handleFocusReady}
+          />
+        </section>
 
         <section className="w-full max-w-3xl">
           <div className="mb-3 flex items-center justify-between">

@@ -2,7 +2,7 @@ import type { ChangeEvent, JSX, KeyboardEventHandler } from 'react'
 import { useEffect, useRef } from 'react'
 import type { MessageAttachment } from 'src/shared/chat'
 
-type ChatComposerProps = {
+type AgentComposerProps = {
   value: string
   onChange: (value: string) => void
   onKeyDown: KeyboardEventHandler<HTMLInputElement | HTMLTextAreaElement>
@@ -113,7 +113,7 @@ const AttachmentChip = ({
   </div>
 )
 
-const ChatComposer = ({
+const AgentComposer = ({
   value,
   onChange,
   onKeyDown,
@@ -131,20 +131,24 @@ const ChatComposer = ({
   autoFocus = false,
   showAttachmentButton = true,
   onFocusReady
-}: ChatComposerProps): JSX.Element => {
+}: AgentComposerProps): JSX.Element => {
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
-    const el = textareaRef.current
-    if (!el) return
-    el.style.height = 'auto'
-    el.style.height = `${el.scrollHeight}px`
+    const textarea = textareaRef.current
+    if (!textarea) return
+    textarea.style.height = 'auto'
+    textarea.style.height = `${textarea.scrollHeight}px`
   }, [value])
 
   useEffect(() => {
     onFocusReady?.(() => {
-      textareaRef.current?.focus()
+      const textarea = textareaRef.current
+      if (!textarea) return
+      textarea.focus()
+      const cursorPosition = textarea.value.length
+      textarea.setSelectionRange(cursorPosition, cursorPosition)
     })
   }, [onFocusReady])
 
@@ -245,4 +249,4 @@ const ChatComposer = ({
   )
 }
 
-export default ChatComposer
+export default AgentComposer

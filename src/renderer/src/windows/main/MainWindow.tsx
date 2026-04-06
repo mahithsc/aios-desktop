@@ -68,13 +68,13 @@ const MainWindow = (): JSX.Element => {
     <main className="flex h-screen flex-col overflow-hidden bg-background text-foreground">
       <div className="relative flex min-h-0 w-full flex-1 flex-col overflow-hidden">
         <header
-          className="pointer-events-none absolute inset-x-0 top-0 z-10 grid grid-cols-[1fr_auto_1fr] items-center px-2 pt-2 sm:px-3 sm:pt-3"
+          className="pointer-events-none absolute inset-x-0 top-0 z-10 grid grid-cols-[1fr_auto_1fr] items-center px-2 pt-1.5 sm:px-3 sm:pt-2"
           style={dragRegionStyle}
         >
           <div />
 
           <nav
-            className="pointer-events-auto justify-self-center flex items-center gap-1 rounded-full border border-border bg-card p-1"
+            className="pointer-events-auto justify-self-center flex items-center gap-0.5 rounded-full border border-border bg-card p-0.5"
             style={noDragRegionStyle}
           >
             {tabs.map((tab) => {
@@ -87,10 +87,10 @@ const MainWindow = (): JSX.Element => {
                   key={tab.id}
                   type="button"
                   onClick={() => handleSelectTab(tab.id)}
-                  className={`rounded-full px-4.5 py-1.5 text-sm font-normal transition ${
+                  className={`rounded-full px-3 py-1 text-[13px] font-normal transition ${
                     isActive
                       ? 'bg-primary text-primary-foreground'
-                      : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
+                      : 'text-muted-foreground hover:bg-accent/80 hover:text-accent-foreground'
                   }`}
                 >
                   {tab.label}
@@ -100,7 +100,7 @@ const MainWindow = (): JSX.Element => {
           </nav>
 
           <div
-            className="pointer-events-auto justify-self-end rounded-full border border-border bg-card px-4 py-2 text-sm text-muted-foreground"
+            className="pointer-events-auto justify-self-end rounded-full border border-border bg-card px-3 py-1.5 text-xs text-muted-foreground"
             style={noDragRegionStyle}
           >
             GPT 5.4
