@@ -1,6 +1,7 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import { electronAPI } from '@electron-toolkit/preload'
 import type { MessageAttachment } from '../shared/chat'
+import type { SocketConnectionState } from '../main/services/SocketService'
 import type { WSEnvelope } from '../shared/ws'
 
 type UploadAttachmentFile = {
@@ -22,6 +23,7 @@ const api = {
   hideWidgetWindow: () => ipcRenderer.send('renderer:hide-widget-window'),
   toggleWidgetWindow: () => ipcRenderer.send('renderer:toggle-widget-window'),
   moveWidgetWindow: (position: WidgetPosition) => ipcRenderer.send('renderer:move-widget-window', position),
+  resetWidgetWindowHeight: () => ipcRenderer.send('renderer:reset-widget-window-height'),
   getWidgetMaxHeight: (): Promise<number> => ipcRenderer.invoke('renderer:get-widget-max-height'),
   uploadAttachments: (
     chatId: string,
@@ -39,6 +41,20 @@ const api = {
 
     return () => {
       ipcRenderer.removeListener('main:socket-event', subscription)
+    }
+  },
+  onSocketStateChange: (listener: (state: SocketConnectionState) => void) => {
+    const subscription = (
+      _event: Electron.IpcRendererEvent,
+      socketState: SocketConnectionState
+    ): void => {
+      listener(socketState)
+    }
+
+    ipcRenderer.on('main:socket-state', subscription)
+
+    return () => {
+      ipcRenderer.removeListener('main:socket-state', subscription)
     }
   }
 }

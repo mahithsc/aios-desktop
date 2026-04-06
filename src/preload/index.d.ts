@@ -1,5 +1,6 @@
 import { ElectronAPI } from '@electron-toolkit/preload'
 import type { MessageAttachment } from '../shared/chat'
+import type { SocketConnectionState } from '../main/services/SocketService'
 import type { WSEnvelope } from '../shared/ws'
 
 interface UploadAttachmentFile {
@@ -19,9 +20,11 @@ interface AppAPI {
   hideWidgetWindow: () => void
   toggleWidgetWindow: () => void
   moveWidgetWindow: (position: WidgetPosition) => void
+  resetWidgetWindowHeight: () => void
   getWidgetMaxHeight: () => Promise<number>
   uploadAttachments: (chatId: string, files: UploadAttachmentFile[]) => Promise<MessageAttachment[]>
   onSocketEvent: (listener: (event: WSEnvelope) => void) => () => void
+  onSocketStateChange: (listener: (state: SocketConnectionState) => void) => () => void
   logToConsole: (
     level: 'debug' | 'info' | 'warn' | 'error',
     message: string,

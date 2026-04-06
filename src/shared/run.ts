@@ -33,6 +33,7 @@ export interface RunEventPayload {
 
 export interface RunEvent {
   runId: string
+  kind?: RunKind | null
   sequence: number
   createdAt: UnixMs
   chatId?: string | null
@@ -52,6 +53,8 @@ export interface RunSnapshot {
 
 export interface ProcessSnapshotListRequest {
   statuses?: RunStatus[]
+  kinds?: RunKind[]
+  limit?: number
 }
 
 export interface RunResumeRequest {

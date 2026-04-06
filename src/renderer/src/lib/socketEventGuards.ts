@@ -3,7 +3,7 @@ import type { Chat, ChatMetadata, LLMEvent } from 'src/shared/chat'
 import type { CanvasArtifact, CanvasToolResult, ChatCanvasArtifact } from 'src/shared/canvas'
 import type { CronUpcomingItem, CronUpcomingListResponse } from 'src/shared/cron'
 import type { Notification, NotificationListResponse } from 'src/shared/notification'
-import type { Run, RunEvent } from 'src/shared/run'
+import type { Run, RunEvent, RunSnapshot } from 'src/shared/run'
 
 const logCanvasDebug = (message: string, details?: Record<string, unknown>): void => {
   console.debug('[canvas]', message, details ?? {})
@@ -36,6 +36,18 @@ export const isRunEvent = (value: unknown): value is RunEvent =>
 
 export const isRun = (value: unknown): value is Run =>
   typeof value === 'object' && value !== null && 'id' in value && 'kind' in value
+
+export const isRunSnapshot = (value: unknown): value is RunSnapshot =>
+  typeof value === 'object' &&
+  value !== null &&
+  'runId' in value &&
+  'kind' in value &&
+  'status' in value &&
+  'updatedAt' in value &&
+  'lastSequence' in value
+
+export const isRunSnapshotList = (value: unknown): value is RunSnapshot[] =>
+  Array.isArray(value) && value.every(isRunSnapshot)
 
 export const isNotification = (value: unknown): value is Notification =>
   typeof value === 'object' &&

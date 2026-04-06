@@ -128,6 +128,30 @@ const resizeWidgetWindowToPreferredHeight = (
   targetWindow.setBounds(nextBounds, false)
 }
 
+const resizeWidgetWindowToHeight = (targetWindow: BrowserWindow, nextHeight: number): void => {
+  const currentBounds = targetWindow.getBounds()
+  const display = screen.getDisplayMatching(currentBounds)
+  const nextBounds = getDraggedWidgetBoundsForDisplay(
+    {
+      width: currentBounds.width,
+      height: nextHeight
+    },
+    display,
+    currentBounds
+  )
+
+  if (
+    nextBounds.x === currentBounds.x &&
+    nextBounds.y === currentBounds.y &&
+    nextBounds.width === currentBounds.width &&
+    nextBounds.height === currentBounds.height
+  ) {
+    return
+  }
+
+  targetWindow.setBounds(nextBounds, false)
+}
+
 app.whenReady().then(() => {
   let mainWindow: BrowserWindow | null = null
   let widgetWindow: BrowserWindow | null = null
@@ -347,6 +371,14 @@ app.whenReady().then(() => {
     widgetWindow.setBounds(nextBounds, false)
   })
 
+  ipcMain.on('renderer:reset-widget-window-height', () => {
+    if (!widgetWindow || widgetWindow.isDestroyed()) {
+      return
+    }
+
+    resizeWidgetWindowToHeight(widgetWindow, WIDGET_WINDOW_MIN_HEIGHT)
+  })
+
   ipcMain.handle('renderer:get-widget-max-height', async () => {
     if (widgetWindow && !widgetWindow.isDestroyed()) {
       return getMaxWidgetHeightForDisplay(screen.getDisplayMatching(widgetWindow.getBounds()))
@@ -422,6 +454,10 @@ app.whenReady().then(() => {
   socketService.onStateChange((state) => {
     if (is.dev) {
       console.log(`[socket] state -> ${state}`)
+    }
+
+    for (const window of BrowserWindow.getAllWindows()) {
+      window.webContents.send('main:socket-state', state)
     }
   })
 

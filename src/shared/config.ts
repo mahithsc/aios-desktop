@@ -1,5 +1,5 @@
-// export const SERVER_URL = 'http://10.0.0.74:8765'
 export const SERVER_URL = 'http://localhost:8765'
+// export const SERVER_URL = 'http://10.0.0.74:8765'
 
 export const APP_COLORS = {
   background: 'rgb(33 33 33)',

@@ -183,6 +183,15 @@ const WidgetWindow = ({ onRequestClose }: WidgetWindowProps): JSX.Element => {
     })
   }, [chat.messages, isRunning, shouldShowHistory])
 
+  useEffect(() => {
+    if (shouldShowHistory) {
+      return
+    }
+
+    setIsHeightCapped(false)
+    window.api.resetWidgetWindowHeight()
+  }, [shouldShowHistory])
+
   useLayoutEffect(() => {
     const widget = widgetRef.current
     const history = historyRef.current

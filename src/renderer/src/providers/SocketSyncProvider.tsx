@@ -10,19 +10,32 @@ import {
   isNotification,
   isNotificationListResponse,
   isRun,
-  isRunEvent
+  isRunEvent,
+  isRunSnapshotList
 } from '../lib/socketEventGuards'
 import { runEventToChatEvent } from '../lib/runEventToChatEvent'
 import { useCanvasStore } from '../store/useCanvasStore'
 import { useAssistantStore } from '../store/useAssistantStore'
 import { useChatStore } from '../store/useChatSessionStore'
 import { useCronStore } from '../store/useCronStore'
+import { useHeartbeatStore } from '../store/useHeartbeatStore'
 import { useNotificationStore } from '../store/useNotificationStore'
+import { useSocketStore } from '../store/socketStore'
 
 const CRON_REFRESH_INTERVAL_MS = 30_000
 
 type SocketSyncProviderProps = {
   children: ReactNode
+}
+
+const requestHeartbeatSnapshots = (): void => {
+  window.api.sendSocketMessage({
+    type: 'process.snapshot.list',
+    data: {
+      kinds: ['heartbeat'],
+      limit: 6
+    }
+  })
 }
 
 const SocketSyncProvider = ({ children }: SocketSyncProviderProps): ReactNode => {
@@ -34,9 +47,14 @@ const SocketSyncProvider = ({ children }: SocketSyncProviderProps): ReactNode =>
   const setAssistants = useAssistantStore((state) => state.setAssistants)
   const upsertAssistant = useAssistantStore((state) => state.upsertAssistant)
   const setUpcomingCrons = useCronStore((state) => state.setUpcomingCrons)
+  const acceptHeartbeatRun = useHeartbeatStore((state) => state.acceptRun)
+  const applyHeartbeatEvent = useHeartbeatStore((state) => state.applyEvent)
+  const setHeartbeatSnapshots = useHeartbeatStore((state) => state.setSnapshots)
   const addNotification = useNotificationStore((state) => state.addNotification)
   const dismissNotification = useNotificationStore((state) => state.dismissNotification)
   const setNotifications = useNotificationStore((state) => state.setNotifications)
+  const connectionState = useSocketStore((state) => state.connectionState)
+  const setConnectionState = useSocketStore((state) => state.setConnectionState)
 
   useEffect(() => {
     window.api.sendSocketMessage({
@@ -55,7 +73,16 @@ const SocketSyncProvider = ({ children }: SocketSyncProviderProps): ReactNode =>
       type: 'cron.upcoming.list',
       data: null
     })
+    requestHeartbeatSnapshots()
   }, [])
+
+  useEffect(() => window.api.onSocketStateChange(setConnectionState), [setConnectionState])
+
+  useEffect(() => {
+    if (connectionState === 'connected') {
+      requestHeartbeatSnapshots()
+    }
+  }, [connectionState])
 
   useEffect(() => {
     const intervalId = window.setInterval(() => {
@@ -134,12 +161,27 @@ const SocketSyncProvider = ({ children }: SocketSyncProviderProps): ReactNode =>
         return
       }
 
+      if (socketEvent.type === 'process.snapshot.list' && isRunSnapshotList(socketEvent.data)) {
+        setHeartbeatSnapshots(socketEvent.data)
+        return
+      }
+
       if (socketEvent.type === 'run.accepted' && isRun(socketEvent.data)) {
+        acceptHeartbeatRun(socketEvent.data)
         if (
           socketEvent.data.chatId === useChatStore.getState().chat.id &&
           socketEvent.data.turnId
         ) {
           bindAssistantRun(socketEvent.data.turnId, socketEvent.data.id)
+        }
+        return
+      }
+
+      if (socketEvent.type === 'run.resume' && Array.isArray(socketEvent.data)) {
+        for (const resumedEvent of socketEvent.data) {
+          if (isRunEvent(resumedEvent)) {
+            applyHeartbeatEvent(resumedEvent)
+          }
         }
         return
       }
@@ -181,6 +223,11 @@ const SocketSyncProvider = ({ children }: SocketSyncProviderProps): ReactNode =>
           type: 'chat-history',
           data: null
         })
+      }
+
+      if (socketEvent.data.kind === 'heartbeat') {
+        applyHeartbeatEvent(socketEvent.data)
+        return
       }
 
       if (socketEvent.data.chatId !== useChatStore.getState().chat.id) {
@@ -237,12 +284,15 @@ const SocketSyncProvider = ({ children }: SocketSyncProviderProps): ReactNode =>
   }, [
     addAssistantMessageEvent,
     addNotification,
+    applyHeartbeatEvent,
+    acceptHeartbeatRun,
     bindAssistantRun,
     dismissNotification,
     setCanvasArtifact,
     setAssistants,
     setChat,
     setChatHistory,
+    setHeartbeatSnapshots,
     setUpcomingCrons,
     setNotifications,
     upsertAssistant

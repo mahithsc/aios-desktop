@@ -5,9 +5,11 @@ import { useMemo, type JSX, type KeyboardEvent } from 'react'
 import { useChatStore } from '../../store/useChatSessionStore'
 import { useCanvasStore } from '../../store/useCanvasStore'
 import { useCronStore } from '../../store/useCronStore'
+import { useHeartbeatStore } from '../../store/useHeartbeatStore'
 import { useInputStore } from '../../store/useInputStore'
 import { useNotificationStore } from '../../store/useNotificationStore'
 import ChatComposer from '../agents/components/ChatComposer'
+import HeartbeatCard from './components/HeartbeatCard'
 import NotificationCard from './components/NotificationCard'
 import UpcomingCronCard from './components/UpcomingCronCard'
 import { useChatAttachments } from '../../lib/chatAttachments'
@@ -176,6 +178,9 @@ const Home = ({ onOpenAgents }: HomeProps): JSX.Element => {
   const createAssistantMessageStub = useChatStore((state) => state.createAssistantMessageStub)
   const canvasArtifactsByChatId = useCanvasStore((state) => state.artifactsByChatId)
   const upcomingCrons = useCronStore((state) => state.upcomingCrons)
+  const activeHeartbeatRunId = useHeartbeatStore((state) => state.activeRunId)
+  const lastHeartbeatRunId = useHeartbeatStore((state) => state.lastRunId)
+  const heartbeatRunsById = useHeartbeatStore((state) => state.runsById)
   const notifications = useNotificationStore((state) => state.notifications)
   const dismissNotification = useNotificationStore((state) => state.dismissNotification)
   const { attachments, clearAttachments, isUploading, removeAttachment, uploadError, uploadFiles } =
@@ -197,6 +202,8 @@ const Home = ({ onOpenAgents }: HomeProps): JSX.Element => {
     [chatHistory]
   )
   const visibleUpcomingCrons = useMemo(() => upcomingCrons.slice(0, 6), [upcomingCrons])
+  const activeHeartbeat = activeHeartbeatRunId ? heartbeatRunsById[activeHeartbeatRunId] ?? null : null
+  const lastHeartbeat = lastHeartbeatRunId ? heartbeatRunsById[lastHeartbeatRunId] ?? null : null
   const activeRunId = useMemo(() => {
     const activeMessage = [...chat.messages]
       .reverse()
@@ -359,6 +366,25 @@ const Home = ({ onOpenAgents }: HomeProps): JSX.Element => {
           ) : (
             <div className="rounded-2xl border border-dashed border-border bg-card px-4 py-6 text-sm text-muted-foreground">
               No upcoming cron jobs.
+            </div>
+          )}
+        </section>
+
+        <section className="w-full max-w-3xl">
+          <div className="mb-3 flex items-center justify-between">
+            <h2 className="text-sm font-medium text-foreground">Heartbeat</h2>
+            <span className="text-xs text-muted-foreground">
+              {activeHeartbeat ? 'Live' : lastHeartbeat ? 'Latest run' : 'Waiting'}
+            </span>
+          </div>
+
+          {activeHeartbeat ? (
+            <HeartbeatCard run={activeHeartbeat} title="Heartbeat running now" />
+          ) : lastHeartbeat ? (
+            <HeartbeatCard run={lastHeartbeat} title="Most recent heartbeat" />
+          ) : (
+            <div className="rounded-2xl border border-dashed border-border bg-card px-4 py-6 text-sm text-muted-foreground">
+              No heartbeat runs observed yet.
             </div>
           )}
         </section>
