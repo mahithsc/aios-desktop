@@ -49,6 +49,7 @@ const SocketSyncProvider = ({ children }: SocketSyncProviderProps): ReactNode =>
   const setUpcomingCrons = useCronStore((state) => state.setUpcomingCrons)
   const acceptHeartbeatRun = useHeartbeatStore((state) => state.acceptRun)
   const applyHeartbeatEvent = useHeartbeatStore((state) => state.applyEvent)
+  const applyHeartbeatEvents = useHeartbeatStore((state) => state.applyEvents)
   const setHeartbeatSnapshots = useHeartbeatStore((state) => state.setSnapshots)
   const addNotification = useNotificationStore((state) => state.addNotification)
   const dismissNotification = useNotificationStore((state) => state.dismissNotification)
@@ -178,11 +179,7 @@ const SocketSyncProvider = ({ children }: SocketSyncProviderProps): ReactNode =>
       }
 
       if (socketEvent.type === 'run.resume' && Array.isArray(socketEvent.data)) {
-        for (const resumedEvent of socketEvent.data) {
-          if (isRunEvent(resumedEvent)) {
-            applyHeartbeatEvent(resumedEvent)
-          }
-        }
+        applyHeartbeatEvents(socketEvent.data.filter(isRunEvent))
         return
       }
 
@@ -285,6 +282,7 @@ const SocketSyncProvider = ({ children }: SocketSyncProviderProps): ReactNode =>
     addAssistantMessageEvent,
     addNotification,
     applyHeartbeatEvent,
+    applyHeartbeatEvents,
     acceptHeartbeatRun,
     bindAssistantRun,
     dismissNotification,

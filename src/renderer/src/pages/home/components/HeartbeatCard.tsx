@@ -41,13 +41,18 @@ const getStatusClassName = (status: HeartbeatRunRecord['status']): string => {
 type HeartbeatCardProps = {
   run: HeartbeatRunRecord
   title: string
+  onClick: () => void
 }
 
-const HeartbeatCard = ({ run, title }: HeartbeatCardProps): JSX.Element => {
+const HeartbeatCard = ({ run, title, onClick }: HeartbeatCardProps): JSX.Element => {
   const timingLabel = run.status === 'running' || run.status === 'queued' ? 'Updated' : 'Finished'
 
   return (
-    <article className="rounded-2xl border border-border bg-card px-4 py-4 shadow-sm">
+    <button
+      type="button"
+      onClick={onClick}
+      className="block w-full rounded-2xl border border-border bg-card px-4 py-4 text-left shadow-sm transition hover:bg-accent"
+    >
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <div className="flex items-center gap-2 text-xs uppercase tracking-[0.14em] text-muted-foreground">
@@ -76,7 +81,7 @@ const HeartbeatCard = ({ run, title }: HeartbeatCardProps): JSX.Element => {
           {run.runId.slice(0, 8)}
         </span>
       </div>
-    </article>
+    </button>
   )
 }
 

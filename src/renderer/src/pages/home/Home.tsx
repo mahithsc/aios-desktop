@@ -166,9 +166,10 @@ const ArtifactCard = ({
 
 type HomeProps = {
   onOpenAgents: () => void
+  onOpenHeartbeats: () => void
 }
 
-const Home = ({ onOpenAgents }: HomeProps): JSX.Element => {
+const Home = ({ onOpenAgents, onOpenHeartbeats }: HomeProps): JSX.Element => {
   const value = useInputStore((state) => state.value)
   const setValue = useInputStore((state) => state.setValue)
   const clearValue = useInputStore((state) => state.clearValue)
@@ -379,9 +380,17 @@ const Home = ({ onOpenAgents }: HomeProps): JSX.Element => {
           </div>
 
           {activeHeartbeat ? (
-            <HeartbeatCard run={activeHeartbeat} title="Heartbeat running now" />
+            <HeartbeatCard
+              run={activeHeartbeat}
+              title="Heartbeat running now"
+              onClick={onOpenHeartbeats}
+            />
           ) : lastHeartbeat ? (
-            <HeartbeatCard run={lastHeartbeat} title="Most recent heartbeat" />
+            <HeartbeatCard
+              run={lastHeartbeat}
+              title="Most recent heartbeat"
+              onClick={onOpenHeartbeats}
+            />
           ) : (
             <div className="rounded-2xl border border-dashed border-border bg-card px-4 py-6 text-sm text-muted-foreground">
               No heartbeat runs observed yet.

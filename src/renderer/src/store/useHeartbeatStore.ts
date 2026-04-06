@@ -18,6 +18,7 @@ export interface HeartbeatRunRecord {
 
 type HeartbeatStoreState = {
   runsById: Record<string, HeartbeatRunRecord>
+  eventsByRunId: Record<string, RunEvent[]>
   activeRunId: string | null
   lastRunId: string | null
   lastUpdatedAt: number | null
@@ -27,11 +28,13 @@ type HeartbeatStoreActions = {
   setSnapshots: (snapshots: RunSnapshot[]) => void
   acceptRun: (run: Run) => void
   applyEvent: (event: RunEvent) => void
+  applyEvents: (events: RunEvent[]) => void
   clear: () => void
 }
 
 const emptyState = (): HeartbeatStoreState => ({
   runsById: {},
+  eventsByRunId: {},
   activeRunId: null,
   lastRunId: null,
   lastUpdatedAt: null
@@ -114,6 +117,30 @@ const pruneRuns = (runsById: Record<string, HeartbeatRunRecord>): Record<string,
   const runs = Object.values(runsById).sort((left, right) => right.updatedAt - left.updatedAt)
   return Object.fromEntries(runs.slice(0, MAX_HEARTBEAT_RUNS).map((run) => [run.runId, run]))
 }
+
+const mergeRunEvents = (existing: RunEvent[] | undefined, nextEvents: RunEvent[]): RunEvent[] => {
+  const eventsBySequence = new Map<number, RunEvent>()
+
+  for (const event of existing ?? []) {
+    eventsBySequence.set(event.sequence, event)
+  }
+
+  for (const event of nextEvents) {
+    eventsBySequence.set(event.sequence, event)
+  }
+
+  return [...eventsBySequence.values()].sort((left, right) => left.sequence - right.sequence)
+}
+
+const pruneEvents = (
+  eventsByRunId: Record<string, RunEvent[]>,
+  runsById: Record<string, HeartbeatRunRecord>
+): Record<string, RunEvent[]> =>
+  Object.fromEntries(
+    Object.entries(eventsByRunId).filter(([runId]) =>
+      Object.prototype.hasOwnProperty.call(runsById, runId)
+    )
+  )
 
 const mergeSnapshot = (
   existing: HeartbeatRunRecord | undefined,
@@ -208,6 +235,7 @@ export const useHeartbeatStore = create<HeartbeatStoreState & HeartbeatStoreActi
       const prunedRunsById = pruneRuns(nextRunsById)
       return {
         runsById: prunedRunsById,
+        eventsByRunId: pruneEvents(state.eventsByRunId, prunedRunsById),
         ...recalculatePointers(prunedRunsById)
       }
     }),
@@ -225,6 +253,7 @@ export const useHeartbeatStore = create<HeartbeatStoreState & HeartbeatStoreActi
       const prunedRunsById = pruneRuns(nextRunsById)
       return {
         runsById: prunedRunsById,
+        eventsByRunId: pruneEvents(state.eventsByRunId, prunedRunsById),
         ...recalculatePointers(prunedRunsById)
       }
     }),
@@ -240,8 +269,45 @@ export const useHeartbeatStore = create<HeartbeatStoreState & HeartbeatStoreActi
         [event.runId]: mergeEvent(state.runsById[event.runId], event)
       }
       const prunedRunsById = pruneRuns(nextRunsById)
+      const nextEventsByRunId = {
+        ...state.eventsByRunId,
+        [event.runId]: mergeRunEvents(state.eventsByRunId[event.runId], [event])
+      }
       return {
         runsById: prunedRunsById,
+        eventsByRunId: pruneEvents(nextEventsByRunId, prunedRunsById),
+        ...recalculatePointers(prunedRunsById)
+      }
+    }),
+
+  applyEvents: (events) =>
+    set((state) => {
+      if (events.length === 0) {
+        return state
+      }
+
+      let hasHeartbeatEvent = false
+      const nextRunsById = { ...state.runsById }
+      const nextEventsByRunId = { ...state.eventsByRunId }
+
+      for (const event of events) {
+        if (!isHeartbeatEvent(event, nextRunsById)) {
+          continue
+        }
+
+        hasHeartbeatEvent = true
+        nextRunsById[event.runId] = mergeEvent(nextRunsById[event.runId], event)
+        nextEventsByRunId[event.runId] = mergeRunEvents(nextEventsByRunId[event.runId], [event])
+      }
+
+      if (!hasHeartbeatEvent) {
+        return state
+      }
+
+      const prunedRunsById = pruneRuns(nextRunsById)
+      return {
+        runsById: prunedRunsById,
+        eventsByRunId: pruneEvents(nextEventsByRunId, prunedRunsById),
         ...recalculatePointers(prunedRunsById)
       }
     }),
