@@ -11,6 +11,7 @@ export interface MessageAttachment {
   kind: AttachmentKind
   name: string
   filePath: string
+  previewUrl?: string
   mimeType?: string
   sizeBytes?: number
   uploadedAt?: UnixMs

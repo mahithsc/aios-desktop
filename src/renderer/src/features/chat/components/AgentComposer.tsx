@@ -1,6 +1,8 @@
+import { Paperclip } from 'lucide-react'
 import type { ChangeEvent, JSX, KeyboardEventHandler } from 'react'
 import { useEffect, useRef } from 'react'
 import type { MessageAttachment } from 'src/shared/chat'
+import PendingAttachmentCard from '../../attachments/components/PendingAttachmentCard'
 
 type AgentComposerProps = {
   value: string
@@ -85,32 +87,9 @@ const AttachmentButton = ({
     disabled={disabled}
     className="inline-flex items-center gap-2 rounded-full border border-border bg-secondary px-3 py-1.5 text-xs font-medium text-secondary-foreground transition hover:bg-accent disabled:cursor-not-allowed disabled:text-muted-foreground"
   >
-    <span className="text-sm leading-none">+</span>
+    <Paperclip className="h-3.5 w-3.5" aria-hidden="true" />
     <span>{label}</span>
   </button>
-)
-
-const AttachmentChip = ({
-  attachment,
-  onRemove
-}: {
-  attachment: MessageAttachment
-  onRemove: (attachmentId: string) => void
-}): JSX.Element => (
-  <div className="inline-flex items-center gap-2 rounded-full bg-secondary px-3 py-1.5 text-xs text-secondary-foreground">
-    <span className="max-w-44 truncate">
-      {attachment.kind === 'image' ? 'Image' : attachment.kind === 'audio' ? 'Audio' : 'File'}:{' '}
-      {attachment.name}
-    </span>
-    <button
-      type="button"
-      onClick={() => onRemove(attachment.id)}
-      className="text-muted-foreground transition hover:text-foreground"
-      aria-label={`Remove ${attachment.name}`}
-    >
-      x
-    </button>
-  </div>
 )
 
 const AgentComposer = ({
@@ -127,7 +106,7 @@ const AgentComposer = ({
   onRemoveAttachment,
   uploadError = null,
   fixed = true,
-  placeholder = 'Message an agent...',
+  placeholder = 'Ask your computer',
   autoFocus = false,
   showAttachmentButton = true,
   onFocusReady
@@ -191,7 +170,7 @@ const AgentComposer = ({
         {attachments.length > 0 ? (
           <div className="flex flex-wrap gap-2">
             {attachments.map((attachment) => (
-              <AttachmentChip
+              <PendingAttachmentCard
                 key={attachment.id}
                 attachment={attachment}
                 onRemove={onRemoveAttachment}
@@ -228,15 +207,15 @@ const AgentComposer = ({
             <div />
           )}
           <div className="flex items-center gap-2 text-xs text-muted-foreground">
-            <span>
-              {isRunning
-                ? canStop
-                  ? 'Agent is running'
-                  : 'Starting run...'
-                : attachments.length > 0
-                  ? `${attachments.length} attached`
-                  : 'No files attached'}
-            </span>
+            {isRunning || attachments.length > 0 ? (
+              <span>
+                {isRunning
+                  ? canStop
+                    ? 'Agent is running'
+                    : 'Starting run...'
+                  : `${attachments.length} attached`}
+              </span>
+            ) : null}
             {isRunning ? (
               <StopButton onClick={() => onStop?.()} disabled={!canStop} />
             ) : (

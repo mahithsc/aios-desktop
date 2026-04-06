@@ -6,7 +6,7 @@ import type {
   ReactNode
 } from 'react'
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import type { MessageAttachment } from 'src/shared/chat'
+import PendingAttachmentCard from '../../features/attachments/components/PendingAttachmentCard'
 import ChatMessages from '../../features/chat/components/ChatMessages'
 import { useChatStore } from '../../features/chat/store/useChatSessionStore'
 import { useInputStore } from '../../features/chat/store/useInputStore'
@@ -56,29 +56,6 @@ const ComposerActionButton = ({
     </button>
   )
 }
-
-const AttachmentChip = ({
-  attachment,
-  onRemove
-}: {
-  attachment: MessageAttachment
-  onRemove: (attachmentId: string) => void
-}): JSX.Element => (
-  <div className="inline-flex items-center gap-2 rounded-full bg-white/6 px-3 py-1.5 text-[11px] text-white/72">
-    <span className="max-w-40 truncate">
-      {attachment.kind === 'image' ? 'Image' : attachment.kind === 'audio' ? 'Audio' : 'File'}:{' '}
-      {attachment.name}
-    </span>
-    <button
-      type="button"
-      onClick={() => onRemove(attachment.id)}
-      className="text-white/40 transition hover:text-white/80"
-      aria-label={`Remove ${attachment.name}`}
-    >
-      x
-    </button>
-  </div>
-)
 
 type WidgetDragState = {
   pointerId: number
@@ -250,7 +227,7 @@ const WidgetAppShell = ({ onRequestClose }: WidgetAppShellProps): JSX.Element =>
       }
     })
     clearValue()
-    clearAttachments()
+    clearAttachments({ revokePreviewUrls: false })
   }
 
   const handleNewMessage = (): void => {
@@ -340,7 +317,7 @@ const WidgetAppShell = ({ onRequestClose }: WidgetAppShellProps): JSX.Element =>
 
     const target = event.target
     if (
-      target instanceof HTMLElement &&
+      target instanceof Element &&
       target.closest('button, input[type="file"], [data-widget-drag-exempt="true"]')
     ) {
       return
@@ -475,22 +452,10 @@ const WidgetAppShell = ({ onRequestClose }: WidgetAppShellProps): JSX.Element =>
               className="hidden"
             />
 
-            <textarea
-              ref={textareaRef}
-              value={value}
-              onChange={(event) => setValue(event.target.value)}
-              onKeyDown={handleKeyDown}
-              placeholder="Message Aios..."
-              autoFocus
-              rows={1}
-              data-widget-drag-exempt={shouldShowHistory ? 'true' : undefined}
-              className="block max-h-48 w-full resize-none bg-transparent px-4 pt-3 text-[14px] leading-6 text-white outline-none placeholder:text-white/28"
-            />
-
             {attachments.length > 0 ? (
-              <div className="flex flex-wrap gap-2 px-4 pt-2">
+              <div className="flex flex-wrap gap-2 px-4 pt-3">
                 {attachments.map((attachment) => (
-                  <AttachmentChip
+                  <PendingAttachmentCard
                     key={attachment.id}
                     attachment={attachment}
                     onRemove={removeAttachment}
@@ -498,6 +463,18 @@ const WidgetAppShell = ({ onRequestClose }: WidgetAppShellProps): JSX.Element =>
                 ))}
               </div>
             ) : null}
+
+            <textarea
+              ref={textareaRef}
+              value={value}
+              onChange={(event) => setValue(event.target.value)}
+              onKeyDown={handleKeyDown}
+              placeholder="Ask your computer"
+              autoFocus
+              rows={1}
+              data-widget-drag-exempt={shouldShowHistory ? 'true' : undefined}
+              className="block max-h-48 w-full resize-none bg-transparent px-4 pt-3 text-[14px] leading-6 text-white outline-none placeholder:text-white/28"
+            />
 
             {uploadError ? (
               <div className="px-4 pt-2">

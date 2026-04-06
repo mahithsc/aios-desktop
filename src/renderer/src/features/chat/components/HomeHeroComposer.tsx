@@ -1,5 +1,7 @@
+import { Paperclip } from 'lucide-react'
 import { useEffect, useRef, type ChangeEvent, type JSX, type KeyboardEventHandler } from 'react'
 import type { MessageAttachment } from 'src/shared/chat'
+import PendingAttachmentCard from '../../attachments/components/PendingAttachmentCard'
 
 type HomeHeroComposerProps = {
   value: string
@@ -31,7 +33,7 @@ const AttachmentButton = ({
     disabled={disabled}
     className="inline-flex items-center gap-1.5 text-sm font-medium text-muted-foreground transition hover:text-foreground disabled:cursor-not-allowed disabled:text-muted-foreground/50"
   >
-    <span className="text-base leading-none">+</span>
+    <Paperclip className="h-4 w-4" aria-hidden="true" />
     <span>Attach files</span>
   </button>
 )
@@ -54,29 +56,6 @@ const StopButton = ({
       <rect x="6.5" y="6.5" width="11" height="11" rx="1.5" />
     </svg>
   </button>
-)
-
-const AttachmentChip = ({
-  attachment,
-  onRemove
-}: {
-  attachment: MessageAttachment
-  onRemove: (attachmentId: string) => void
-}): JSX.Element => (
-  <div className="inline-flex items-center gap-2 rounded-full bg-secondary px-3 py-1.5 text-xs text-secondary-foreground">
-    <span className="max-w-44 truncate">
-      {attachment.kind === 'image' ? 'Image' : attachment.kind === 'audio' ? 'Audio' : 'File'}:{' '}
-      {attachment.name}
-    </span>
-    <button
-      type="button"
-      onClick={() => onRemove(attachment.id)}
-      className="text-muted-foreground transition hover:text-foreground"
-      aria-label={`Remove ${attachment.name}`}
-    >
-      x
-    </button>
-  </div>
 )
 
 const HomeHeroComposer = ({
@@ -136,7 +115,7 @@ const HomeHeroComposer = ({
 
   return (
     <div className="w-full">
-      <div className="flex w-full flex-col gap-4 bg-transparent px-0 py-0">
+      <div className="flex w-full flex-col gap-3 bg-transparent px-0 py-0">
         <input
           ref={fileInputRef}
           type="file"
@@ -146,6 +125,18 @@ const HomeHeroComposer = ({
           }}
           className="hidden"
         />
+
+        {attachments.length > 0 ? (
+          <div className="flex flex-wrap gap-2">
+            {attachments.map((attachment) => (
+              <PendingAttachmentCard
+                key={attachment.id}
+                attachment={attachment}
+                onRemove={onRemoveAttachment}
+              />
+            ))}
+          </div>
+        ) : null}
 
         <textarea
           ref={textareaRef}
@@ -158,21 +149,9 @@ const HomeHeroComposer = ({
           className="min-h-[4rem] max-h-80 w-full resize-none bg-transparent text-3xl font-light leading-[1.08] tracking-tight text-foreground caret-foreground outline-none placeholder:text-muted-foreground/70 sm:text-[2.6rem]"
         />
 
-        <div className="-mt-3 flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
+        <div className="-mt-2 flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
           <AttachmentButton onClick={handleAttachClick} disabled={isUploading || isRunning} />
         </div>
-
-        {attachments.length > 0 ? (
-          <div className="flex flex-wrap gap-2">
-            {attachments.map((attachment) => (
-              <AttachmentChip
-                key={attachment.id}
-                attachment={attachment}
-                onRemove={onRemoveAttachment}
-              />
-            ))}
-          </div>
-        ) : null}
 
         {uploadError ? (
           <div className="rounded-2xl border border-red-500/30 bg-red-500/15 px-3 py-2 text-xs text-red-200">

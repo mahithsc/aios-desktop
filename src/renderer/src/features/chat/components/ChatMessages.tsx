@@ -10,6 +10,7 @@ import type {
   UserMessage
 } from 'src/shared/chat'
 import Markdown from './Markdown'
+import PendingAttachmentCard from '../../attachments/components/PendingAttachmentCard'
 
 type AssistantRenderItem =
   | {
@@ -464,30 +465,18 @@ const StreamingIndicator = ({ darkMode }: { darkMode: boolean }): JSX.Element =>
 )
 
 const UserAttachmentList = ({
-  attachments,
-  darkMode
+  attachments
 }: {
   attachments: MessageAttachment[]
-  darkMode: boolean
 }): JSX.Element | null => {
   if (attachments.length === 0) {
     return null
   }
 
   return (
-    <div className="mt-2 flex flex-wrap justify-end gap-2">
+    <div className="mb-2 flex flex-col items-end gap-2">
       {attachments.map((attachment) => (
-        <div
-          key={attachment.id}
-          className={`inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs ${
-            darkMode ? 'bg-white/10 text-white/75' : 'bg-white text-stone-600'
-          }`}
-        >
-          <span>
-            {attachment.kind === 'image' ? 'Image' : attachment.kind === 'audio' ? 'Audio' : 'File'}
-          </span>
-          <span className="max-w-40 truncate">{attachment.name}</span>
-        </div>
+        <PendingAttachmentCard key={attachment.id} attachment={attachment} />
       ))}
     </div>
   )
@@ -499,12 +488,7 @@ const UserMessageContent = ({
 }: {
   message: UserMessage
   darkMode: boolean
-}): JSX.Element => (
-  <div>
-    {message.content}
-    <UserAttachmentList attachments={message.attachments ?? []} darkMode={darkMode} />
-  </div>
-)
+}): JSX.Element => <div className={darkMode ? 'text-white/92' : 'text-stone-700'}>{message.content}</div>
 
 const AssistantMessageContent = ({
   message,
@@ -604,6 +588,8 @@ const ChatMessages = ({
 
       {messages.map((message) => {
         const isAssistant = message.role === 'assistant'
+        const userMessageHasText =
+          message.role === 'user' ? message.content.trim().length > 0 : false
 
         return (
           <div
@@ -611,21 +597,24 @@ const ChatMessages = ({
             className={`flex min-w-0 ${isAssistant ? 'justify-start' : 'justify-end'}`}
           >
             <div className={isAssistant ? assistantContainerClassName : 'max-w-md'}>
-              <div
-                className={
-                  isAssistant ? `min-w-0 max-w-full ${assistantTextClassName}` : userBubbleClassName
-                }
-              >
-                {message.role === 'assistant' ? (
+              {message.role === 'assistant' ? (
+                <div className={`min-w-0 max-w-full ${assistantTextClassName}`}>
                   <AssistantMessageContent
                     message={message}
                     darkMode={darkMode}
                     compact={compact}
                   />
-                ) : (
-                  <UserMessageContent message={message} darkMode={darkMode} />
-                )}
-              </div>
+                </div>
+              ) : (
+                <div className="flex flex-col items-end">
+                  <UserAttachmentList attachments={message.attachments ?? []} />
+                  {userMessageHasText ? (
+                    <div className={userBubbleClassName}>
+                      <UserMessageContent message={message} darkMode={darkMode} />
+                    </div>
+                  ) : null}
+                </div>
+              )}
             </div>
           </div>
         )

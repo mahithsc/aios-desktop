@@ -44,16 +44,30 @@ const api = {
     }
   },
   onSocketStateChange: (listener: (state: SocketConnectionState) => void) => {
+    let isSubscribed = true
     const subscription = (
       _event: Electron.IpcRendererEvent,
       socketState: SocketConnectionState
     ): void => {
-      listener(socketState)
+      if (isSubscribed) {
+        listener(socketState)
+      }
     }
 
     ipcRenderer.on('main:socket-state', subscription)
+    void ipcRenderer
+      .invoke('renderer:get-socket-state')
+      .then((socketState: SocketConnectionState) => {
+        if (isSubscribed) {
+          listener(socketState)
+        }
+      })
+      .catch((error) => {
+        console.error('[preload] Failed to get initial socket state.', error)
+      })
 
     return () => {
+      isSubscribed = false
       ipcRenderer.removeListener('main:socket-state', subscription)
     }
   }

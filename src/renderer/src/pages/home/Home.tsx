@@ -13,6 +13,8 @@ import { useHeartbeatStore } from '../../features/heartbeat/store/useHeartbeatSt
 import NotificationCard from '../../features/notifications/components/NotificationCard'
 import { useNotificationStore } from '../../features/notifications/store/useNotificationStore'
 import { useFileDropTarget } from '../../shared/lib/fileDropTarget'
+import { useSocketStore } from '../../shared/store/socketStore'
+import ConnectionStatusCard from './components/ConnectionStatusCard'
 import HomeHeartbeatCard from './components/HomeHeartbeatCard'
 import LocalEnvironmentCard from './components/LocalEnvironmentCard'
 
@@ -179,6 +181,7 @@ const Home = ({ onOpenAgents, onOpenHeartbeats }: HomeProps): JSX.Element => {
   const heartbeatRunsById = useHeartbeatStore((state) => state.runsById)
   const notifications = useNotificationStore((state) => state.notifications)
   const dismissNotification = useNotificationStore((state) => state.dismissNotification)
+  const connectionState = useSocketStore((state) => state.connectionState)
   const {
     attachments,
     canStop,
@@ -258,6 +261,8 @@ const Home = ({ onOpenAgents, onOpenHeartbeats }: HomeProps): JSX.Element => {
         <section className="w-full pt-0 pb-8 sm:pb-14">
           <div className="mx-auto flex w-full max-w-3xl flex-col gap-4">
             <div className="flex w-full flex-col gap-3 sm:flex-row sm:items-start">
+              <ConnectionStatusCard connectionState={connectionState} />
+
               <div className="shrink-0">
                 <LocalEnvironmentCard />
               </div>

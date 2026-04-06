@@ -379,6 +379,8 @@ app.whenReady().then(() => {
     resizeWidgetWindowToHeight(widgetWindow, WIDGET_WINDOW_MIN_HEIGHT)
   })
 
+  ipcMain.handle('renderer:get-socket-state', async () => socketService.connectionState)
+
   ipcMain.handle('renderer:get-widget-max-height', async () => {
     if (widgetWindow && !widgetWindow.isDestroyed()) {
       return getMaxWidgetHeightForDisplay(screen.getDisplayMatching(widgetWindow.getBounds()))

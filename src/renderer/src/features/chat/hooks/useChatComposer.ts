@@ -75,7 +75,7 @@ export const useChatComposer = ({
       }
     })
     clearValue()
-    clearAttachments()
+    clearAttachments({ revokePreviewUrls: false })
     onSubmitted?.()
   }, [
     addUserMessage,
