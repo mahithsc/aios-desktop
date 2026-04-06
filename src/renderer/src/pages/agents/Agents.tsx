@@ -7,15 +7,15 @@ import {
   type JSX,
   type MouseEvent as ReactMouseEvent
 } from 'react'
-import { useChatComposer } from '../../hooks/useChatComposer'
-import { useTypeToFocus } from '../../hooks/useTypeToFocus'
-import { useChatStore } from '../../store/useChatSessionStore'
+import AgentComposer from '../../features/chat/components/AgentComposer'
+import ChatMessages from '../../features/chat/components/ChatMessages'
+import { useChatComposer } from '../../features/chat/hooks/useChatComposer'
+import { useTypeToFocus } from '../../features/chat/hooks/useTypeToFocus'
+import { useChatStore } from '../../features/chat/store/useChatSessionStore'
+import CanvasPanel from '../../features/canvas/components/CanvasPanel'
+import { useCanvasStore } from '../../features/canvas/store/useCanvasStore'
 import { useAssistantStore } from '../../store/useAssistantStore'
-import { useCanvasStore } from '../../store/useCanvasStore'
-import CanvasPanel from '../../components/CanvasPanel'
-import ChatMessages from '../../components/ChatMessages'
-import AgentComposer from './components/AgentComposer'
-import { useFileDropTarget } from '../../lib/fileDropTarget'
+import { useFileDropTarget } from '../../shared/lib/fileDropTarget'
 
 const formatTimestamp = (timestamp: number): string =>
   new Intl.DateTimeFormat(undefined, {

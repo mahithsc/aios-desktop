@@ -35,7 +35,9 @@ const PluginRow = ({ plugin }: { plugin: Plugin }): JSX.Element => {
       className="group flex w-full items-center gap-4 rounded-xl px-2 py-3 text-left transition hover:bg-accent/50"
     >
       <div className="relative shrink-0">
-        <div className={`flex h-11 w-11 items-center justify-center rounded-xl ${plugin.accentClassName}`}>
+        <div
+          className={`flex h-11 w-11 items-center justify-center rounded-xl ${plugin.accentClassName}`}
+        >
           <Icon className="h-6 w-6" />
         </div>
         {plugin.installed ? (
@@ -47,7 +49,9 @@ const PluginRow = ({ plugin }: { plugin: Plugin }): JSX.Element => {
 
       <div className="min-w-0 flex-1">
         <div className="truncate text-[17px] font-normal text-foreground">{plugin.name}</div>
-        <div className="truncate text-sm font-normal text-muted-foreground">{plugin.description}</div>
+        <div className="truncate text-sm font-normal text-muted-foreground">
+          {plugin.description}
+        </div>
       </div>
 
       <ChevronRight className="h-5 w-5 shrink-0 text-muted-foreground transition group-hover:text-foreground" />

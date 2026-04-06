@@ -2,18 +2,19 @@ import type { CanvasArtifact, ChatCanvasArtifact } from 'src/shared/canvas'
 import type { ChatMetadata } from 'src/shared/chat'
 import { AppWindow, FileCode2, ImageIcon, Video } from 'lucide-react'
 import { useMemo, type JSX } from 'react'
-import { useFileDropTarget } from '../../lib/fileDropTarget'
-import { useChatComposer } from '../../hooks/useChatComposer'
-import { useTypeToFocus } from '../../hooks/useTypeToFocus'
-import { useChatStore } from '../../store/useChatSessionStore'
-import { useCanvasStore } from '../../store/useCanvasStore'
-import { useCronStore } from '../../store/useCronStore'
-import { useHeartbeatStore } from '../../store/useHeartbeatStore'
-import { useNotificationStore } from '../../store/useNotificationStore'
-import HeartbeatCard from './components/HeartbeatCard'
-import HomeHeroComposer from './components/HomeHeroComposer'
-import NotificationCard from './components/NotificationCard'
-import UpcomingCronCard from './components/UpcomingCronCard'
+import HomeHeroComposer from '../../features/chat/components/HomeHeroComposer'
+import { useChatComposer } from '../../features/chat/hooks/useChatComposer'
+import { useTypeToFocus } from '../../features/chat/hooks/useTypeToFocus'
+import { useChatStore } from '../../features/chat/store/useChatSessionStore'
+import { useCanvasStore } from '../../features/canvas/store/useCanvasStore'
+import UpcomingCronCard from '../../features/crons/components/UpcomingCronCard'
+import { useCronStore } from '../../features/crons/store/useCronStore'
+import { useHeartbeatStore } from '../../features/heartbeat/store/useHeartbeatStore'
+import NotificationCard from '../../features/notifications/components/NotificationCard'
+import { useNotificationStore } from '../../features/notifications/store/useNotificationStore'
+import { useFileDropTarget } from '../../shared/lib/fileDropTarget'
+import HomeHeartbeatCard from './components/HomeHeartbeatCard'
+import LocalEnvironmentCard from './components/LocalEnvironmentCard'
 
 const formatTimestamp = (timestamp: number): string =>
   new Intl.DateTimeFormat(undefined, {
@@ -215,6 +216,7 @@ const Home = ({ onOpenAgents, onOpenHeartbeats }: HomeProps): JSX.Element => {
     ? (heartbeatRunsById[activeHeartbeatRunId] ?? null)
     : null
   const lastHeartbeat = lastHeartbeatRunId ? (heartbeatRunsById[lastHeartbeatRunId] ?? null) : null
+  const topHeartbeat = activeHeartbeat ?? lastHeartbeat
 
   const handleLoadChat = (chatId: string): void => {
     window.api.sendSocketMessage({
@@ -252,27 +254,48 @@ const Home = ({ onOpenAgents, onOpenHeartbeats }: HomeProps): JSX.Element => {
         </div>
       ) : null}
 
-      <div className="mx-auto flex w-full max-w-5xl flex-col items-center gap-10 px-4 pb-10 pt-6 sm:px-6 sm:pt-10">
-        <section className="w-full max-w-4xl py-8 sm:py-14">
-          <h1 className="sr-only">Start a conversation</h1>
-          <p className="mb-5 text-sm font-medium text-muted-foreground sm:text-base">
-            Hi there, Mahith
-          </p>
-          <HomeHeroComposer
-            value={value}
-            onChange={setValue}
-            onKeyDown={handleKeyDown}
-            onStop={handleStop}
-            attachments={attachments}
-            isUploading={isUploading}
-            isRunning={isRunning}
-            canStop={canStop}
-            onRemoveAttachment={removeAttachment}
-            uploadError={uploadError}
-            placeholder="Ask your computer"
-            autoFocus
-            onFocusReady={handleFocusReady}
-          />
+      <div className="mx-auto flex w-full max-w-5xl flex-col items-center gap-10 px-4 pb-10 pt-0 sm:px-6">
+        <section className="w-full pt-0 pb-8 sm:pb-14">
+          <div className="mx-auto flex w-full max-w-3xl flex-col gap-4">
+            <div className="flex w-full flex-col gap-3 sm:flex-row sm:items-start">
+              <div className="shrink-0">
+                <LocalEnvironmentCard />
+              </div>
+
+              {topHeartbeat ? (
+                <div className="h-40 w-40 shrink-0">
+                  <HomeHeartbeatCard
+                    run={topHeartbeat}
+                    title={activeHeartbeat ? 'Heartbeat running now' : 'Most recent heartbeat'}
+                    onClick={onOpenHeartbeats}
+                  />
+                </div>
+              ) : null}
+            </div>
+
+            <div className="min-w-0 w-full">
+              <h1 className="sr-only">Start a conversation</h1>
+              <p className="mb-2 text-sm font-medium text-muted-foreground sm:text-base">
+                Hi there, Mahith
+              </p>
+              <HomeHeroComposer
+                value={value}
+                onChange={setValue}
+                onKeyDown={handleKeyDown}
+                onFilesSelected={uploadFiles}
+                onStop={handleStop}
+                attachments={attachments}
+                isUploading={isUploading}
+                isRunning={isRunning}
+                canStop={canStop}
+                onRemoveAttachment={removeAttachment}
+                uploadError={uploadError}
+                placeholder="Ask your computer"
+                autoFocus
+                onFocusReady={handleFocusReady}
+              />
+            </div>
+          </div>
         </section>
 
         <section className="w-full max-w-3xl">
@@ -314,33 +337,6 @@ const Home = ({ onOpenAgents, onOpenHeartbeats }: HomeProps): JSX.Element => {
           ) : (
             <div className="rounded-2xl border border-dashed border-border bg-card px-4 py-6 text-sm text-muted-foreground">
               No upcoming cron jobs.
-            </div>
-          )}
-        </section>
-
-        <section className="w-full max-w-3xl">
-          <div className="mb-3 flex items-center justify-between">
-            <h2 className="text-sm font-medium text-foreground">Heartbeat</h2>
-            <span className="text-xs text-muted-foreground">
-              {activeHeartbeat ? 'Live' : lastHeartbeat ? 'Latest run' : 'Waiting'}
-            </span>
-          </div>
-
-          {activeHeartbeat ? (
-            <HeartbeatCard
-              run={activeHeartbeat}
-              title="Heartbeat running now"
-              onClick={onOpenHeartbeats}
-            />
-          ) : lastHeartbeat ? (
-            <HeartbeatCard
-              run={lastHeartbeat}
-              title="Most recent heartbeat"
-              onClick={onOpenHeartbeats}
-            />
-          ) : (
-            <div className="rounded-2xl border border-dashed border-border bg-card px-4 py-6 text-sm text-muted-foreground">
-              No heartbeat runs observed yet.
             </div>
           )}
         </section>

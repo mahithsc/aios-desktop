@@ -1,8 +1,14 @@
 import { useEffect, type ReactNode } from 'react'
+import { useCanvasStore } from '../features/canvas/store/useCanvasStore'
+import { runEventToChatEvent } from '../features/chat/lib/runEventToChatEvent'
+import { useChatStore } from '../features/chat/store/useChatSessionStore'
+import { useCronStore } from '../features/crons/store/useCronStore'
+import { useHeartbeatStore } from '../features/heartbeat/store/useHeartbeatStore'
+import { useNotificationStore } from '../features/notifications/store/useNotificationStore'
 import {
+  getChatCanvasArtifact,
   isAssistant,
   isAssistantList,
-  getChatCanvasArtifact,
   isChat,
   isChatHistory,
   isCronUpcomingListResponse,
@@ -12,15 +18,9 @@ import {
   isRun,
   isRunEvent,
   isRunSnapshotList
-} from '../lib/socketEventGuards'
-import { runEventToChatEvent } from '../lib/runEventToChatEvent'
-import { useCanvasStore } from '../store/useCanvasStore'
+} from '../shared/lib/socketEventGuards'
 import { useAssistantStore } from '../store/useAssistantStore'
-import { useChatStore } from '../store/useChatSessionStore'
-import { useCronStore } from '../store/useCronStore'
-import { useHeartbeatStore } from '../store/useHeartbeatStore'
-import { useNotificationStore } from '../store/useNotificationStore'
-import { useSocketStore } from '../store/socketStore'
+import { useSocketStore } from '../shared/store/socketStore'
 
 const CRON_REFRESH_INTERVAL_MS = 30_000
 
@@ -251,12 +251,16 @@ const SocketSyncProvider = ({ children }: SocketSyncProviderProps): ReactNode =>
           toolCallId: canvasArtifact.toolCallId,
           artifact: canvasArtifact.artifact
         })
-        window.api.logToConsole('debug', '[canvas] Writing canvas artifact from socket event into store.', {
-          chatId: canvasArtifact.chatId,
-          runId: canvasArtifact.runId,
-          toolCallId: canvasArtifact.toolCallId,
-          artifact: canvasArtifact.artifact
-        })
+        window.api.logToConsole(
+          'debug',
+          '[canvas] Writing canvas artifact from socket event into store.',
+          {
+            chatId: canvasArtifact.chatId,
+            runId: canvasArtifact.runId,
+            toolCallId: canvasArtifact.toolCallId,
+            artifact: canvasArtifact.artifact
+          }
+        )
         setCanvasArtifact(canvasArtifact)
       } else {
         console.debug('[canvas]', 'No canvas artifact extracted from run event.', {

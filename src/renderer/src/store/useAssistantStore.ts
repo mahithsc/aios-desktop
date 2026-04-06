@@ -12,7 +12,9 @@ export const useAssistantStore = create<AssistantStore>((set) => ({
 
   setAssistants: (assistants) =>
     set({
-      assistantsByChatId: Object.fromEntries(assistants.map((assistant) => [assistant.chatId, assistant]))
+      assistantsByChatId: Object.fromEntries(
+        assistants.map((assistant) => [assistant.chatId, assistant])
+      )
     }),
 
   upsertAssistant: (assistant) =>

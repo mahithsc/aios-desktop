@@ -9,15 +9,15 @@ import {
   WIDGET_WINDOW_MODE,
   type RendererWindowMode
 } from '@shared/window'
-import App from './App'
-import WidgetApp from './WidgetApp'
+import MainApp from './apps/main/MainApp'
+import WidgetApp from './apps/widget/WidgetApp'
 
 const rootElement = document.documentElement
 const searchParams = new URLSearchParams(window.location.search)
 const requestedWindowMode = searchParams.get(RENDERER_WINDOW_MODE_QUERY_KEY)
 const windowMode: RendererWindowMode =
   requestedWindowMode === WIDGET_WINDOW_MODE ? WIDGET_WINDOW_MODE : MAIN_WINDOW_MODE
-const RootApp = windowMode === WIDGET_WINDOW_MODE ? WidgetApp : App
+const RootApp = windowMode === WIDGET_WINDOW_MODE ? WidgetApp : MainApp
 
 rootElement.classList.add('dark')
 rootElement.style.colorScheme = 'dark'

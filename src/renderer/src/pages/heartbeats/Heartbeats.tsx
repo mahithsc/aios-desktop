@@ -1,9 +1,9 @@
 import { Activity, ArrowLeft } from 'lucide-react'
 import { useEffect, useMemo, useState, type JSX } from 'react'
 import type { AssistantMessage, LLMEvent, MessageStatus } from 'src/shared/chat'
-import ChatMessages from '../../components/ChatMessages'
-import { runEventToChatEvent } from '../../lib/runEventToChatEvent'
-import { useHeartbeatStore } from '../../store/useHeartbeatStore'
+import ChatMessages from '../../features/chat/components/ChatMessages'
+import { runEventToChatEvent } from '../../features/chat/lib/runEventToChatEvent'
+import { useHeartbeatStore } from '../../features/heartbeat/store/useHeartbeatStore'
 
 const formatTimestamp = (timestamp: number | null): string => {
   if (!timestamp) {
@@ -87,21 +87,22 @@ const Heartbeats = ({ onBack }: HeartbeatsProps): JSX.Element => {
   const heartbeatRunsById = useHeartbeatStore((state) => state.runsById)
   const heartbeatEventsByRunId = useHeartbeatStore((state) => state.eventsByRunId)
   const currentRunId = activeHeartbeatRunId ?? lastHeartbeatRunId
-  const currentRun = currentRunId ? heartbeatRunsById[currentRunId] ?? null : null
-  const events = currentRunId ? heartbeatEventsByRunId[currentRunId] ?? [] : []
-  const [isHydrating, setIsHydrating] = useState(false)
+  const currentRun = currentRunId ? (heartbeatRunsById[currentRunId] ?? null) : null
+  const events = useMemo(
+    () => (currentRunId ? (heartbeatEventsByRunId[currentRunId] ?? []) : []),
+    [currentRunId, heartbeatEventsByRunId]
+  )
+  const [hydratedRunId, setHydratedRunId] = useState<string | null>(null)
+  const isHydrating = currentRunId !== null && hydratedRunId !== currentRunId
 
   useEffect(() => {
     if (!currentRunId) {
-      setIsHydrating(false)
       return undefined
     }
 
-    setIsHydrating(true)
-
     const unsubscribe = window.api.onSocketEvent((socketEvent) => {
       if (socketEvent.type === 'run.resume') {
-        setIsHydrating(false)
+        setHydratedRunId(currentRunId)
         return
       }
 
@@ -112,7 +113,7 @@ const Heartbeats = ({ onBack }: HeartbeatsProps): JSX.Element => {
         'runId' in socketEvent.data &&
         socketEvent.data.runId === currentRunId
       ) {
-        setIsHydrating(false)
+        setHydratedRunId(currentRunId)
       }
     })
 
@@ -212,7 +213,11 @@ const Heartbeats = ({ onBack }: HeartbeatsProps): JSX.Element => {
           <div className="mb-4 flex items-center justify-between gap-3">
             <div className="text-sm font-medium text-foreground">Heartbeat activity</div>
             <div className="text-xs text-muted-foreground">
-              {events.length > 0 ? `${events.length} events` : isHydrating ? 'Loading' : 'No events'}
+              {events.length > 0
+                ? `${events.length} events`
+                : isHydrating
+                  ? 'Loading'
+                  : 'No events'}
             </div>
           </div>
 
