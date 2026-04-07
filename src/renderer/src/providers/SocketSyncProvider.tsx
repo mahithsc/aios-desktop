@@ -1,4 +1,6 @@
 import { useEffect, type ReactNode } from 'react'
+import type { ChatStatus } from 'src/shared/chat'
+import type { Run, RunEvent, RunStatus } from 'src/shared/run'
 import { useCanvasStore } from '../features/canvas/store/useCanvasStore'
 import { runEventToChatEvent } from '../features/chat/lib/runEventToChatEvent'
 import { useChatStore } from '../features/chat/store/useChatSessionStore'
@@ -38,11 +40,84 @@ const requestHeartbeatSnapshots = (): void => {
   })
 }
 
+const getChatStatusFromRunStatus = (status: RunStatus): ChatStatus => {
+  if (status === 'completed') return 'idle'
+  if (status === 'error') return 'error'
+  if (status === 'cancelled') return 'cancelled'
+  return 'streaming'
+}
+
+const getChatStatusFromRunEvent = (event: RunEvent): ChatStatus => {
+  if (event.event.type === 'completed') return 'idle'
+  if (event.event.type === 'error') return 'error'
+  if (event.event.type === 'cancelled') return 'cancelled'
+  return 'streaming'
+}
+
+const getPreviewText = (value: unknown): string | undefined => {
+  if (typeof value !== 'string') {
+    return undefined
+  }
+
+  const trimmed = value.trim()
+  return trimmed ? trimmed.slice(0, 160) : undefined
+}
+
+const getChatPreviewFromRunEvent = (event: RunEvent): string | null | undefined => {
+  const data = event.event.data ?? {}
+
+  if (event.event.type === 'progress') {
+    return getPreviewText(data.message)
+  }
+
+  if (event.event.type === 'error') {
+    return getPreviewText(data.error) ?? 'Run failed.'
+  }
+
+  if (event.event.type === 'cancelled') {
+    return getPreviewText(data.reason) ?? 'Run stopped.'
+  }
+
+  return undefined
+}
+
+const getChatActiveStepFromRun = (run: Run): string | null => {
+  if (run.status === 'queued') return 'queued'
+  if (run.status === 'running') return 'running'
+  return null
+}
+
+const getChatActiveStepFromRunEvent = (event: RunEvent): string | null | undefined => {
+  if (
+    event.event.type === 'completed' ||
+    event.event.type === 'error' ||
+    event.event.type === 'cancelled'
+  ) {
+    return null
+  }
+
+  const toolName = event.event.data?.toolName
+  if (event.event.type === 'tool_call_start' && typeof toolName === 'string' && toolName.trim()) {
+    return toolName.trim()
+  }
+
+  if (event.event.type === 'started') {
+    return 'thinking'
+  }
+
+  if (event.event.type === 'subagent_tool_event') {
+    return 'subagent'
+  }
+
+  return undefined
+}
+
 const SocketSyncProvider = ({ children }: SocketSyncProviderProps): ReactNode => {
   const addAssistantMessageEvent = useChatStore((state) => state.addAssistantMessageEvent)
   const bindAssistantRun = useChatStore((state) => state.bindAssistantRun)
   const setChat = useChatStore((state) => state.setChat)
   const setChatHistory = useChatStore((state) => state.setChatHistory)
+  const updateChatMetadata = useChatStore((state) => state.updateChatMetadata)
   const setCanvasArtifact = useCanvasStore((state) => state.setCanvasArtifact)
   const setAssistants = useAssistantStore((state) => state.setAssistants)
   const upsertAssistant = useAssistantStore((state) => state.upsertAssistant)
@@ -169,6 +244,16 @@ const SocketSyncProvider = ({ children }: SocketSyncProviderProps): ReactNode =>
 
       if (socketEvent.type === 'run.accepted' && isRun(socketEvent.data)) {
         acceptHeartbeatRun(socketEvent.data)
+        if (socketEvent.data.kind === 'chat' && socketEvent.data.chatId) {
+          updateChatMetadata({
+            chatId: socketEvent.data.chatId,
+            updatedAt: socketEvent.data.updatedAt,
+            status: getChatStatusFromRunStatus(socketEvent.data.status),
+            activeRunId: socketEvent.data.id,
+            activeStep: getChatActiveStepFromRun(socketEvent.data),
+            preview: null
+          })
+        }
         if (
           socketEvent.data.chatId === useChatStore.getState().chat.id &&
           socketEvent.data.turnId
@@ -225,6 +310,22 @@ const SocketSyncProvider = ({ children }: SocketSyncProviderProps): ReactNode =>
       if (socketEvent.data.kind === 'heartbeat') {
         applyHeartbeatEvent(socketEvent.data)
         return
+      }
+
+      if (socketEvent.data.chatId) {
+        updateChatMetadata({
+          chatId: socketEvent.data.chatId,
+          updatedAt: socketEvent.data.createdAt,
+          status: getChatStatusFromRunEvent(socketEvent.data),
+          activeRunId:
+            socketEvent.data.event.type === 'completed' ||
+            socketEvent.data.event.type === 'error' ||
+            socketEvent.data.event.type === 'cancelled'
+              ? null
+              : socketEvent.data.runId,
+          activeStep: getChatActiveStepFromRunEvent(socketEvent.data),
+          preview: getChatPreviewFromRunEvent(socketEvent.data)
+        })
       }
 
       if (socketEvent.data.chatId !== useChatStore.getState().chat.id) {
@@ -297,6 +398,7 @@ const SocketSyncProvider = ({ children }: SocketSyncProviderProps): ReactNode =>
     setHeartbeatSnapshots,
     setUpcomingCrons,
     setNotifications,
+    updateChatMetadata,
     upsertAssistant
   ])
 

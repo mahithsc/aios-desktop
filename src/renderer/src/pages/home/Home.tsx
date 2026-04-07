@@ -1,17 +1,11 @@
-import type { CanvasArtifact, ChatCanvasArtifact } from 'src/shared/canvas'
 import type { ChatMetadata } from 'src/shared/chat'
-import { AppWindow, FileCode2, ImageIcon, Video } from 'lucide-react'
 import { useMemo, type JSX } from 'react'
 import HomeHeroComposer from '../../features/chat/components/HomeHeroComposer'
 import { useChatComposer } from '../../features/chat/hooks/useChatComposer'
 import { useTypeToFocus } from '../../features/chat/hooks/useTypeToFocus'
 import { useChatStore } from '../../features/chat/store/useChatSessionStore'
-import { useCanvasStore } from '../../features/canvas/store/useCanvasStore'
-import UpcomingCronCard from '../../features/crons/components/UpcomingCronCard'
-import { useCronStore } from '../../features/crons/store/useCronStore'
 import { useHeartbeatStore } from '../../features/heartbeat/store/useHeartbeatStore'
-import NotificationCard from '../../features/notifications/components/NotificationCard'
-import { useNotificationStore } from '../../features/notifications/store/useNotificationStore'
+import { useAssistantStore } from '../../store/useAssistantStore'
 import { useFileDropTarget } from '../../shared/lib/fileDropTarget'
 import { useSocketStore } from '../../shared/store/socketStore'
 import ConnectionStatusCard from './components/ConnectionStatusCard'
@@ -26,167 +20,65 @@ const formatTimestamp = (timestamp: number): string =>
     minute: '2-digit'
   }).format(timestamp)
 
-const getStatusLabel = (status?: ChatMetadata['status']): string => {
-  if (status === 'streaming') return 'Running'
-  if (status === 'cancelled') return 'Stopped'
-  if (status === 'error') return 'Error'
-  return 'Idle'
-}
+const getRunTitle = (chat: ChatMetadata, assistantTitle?: string): string =>
+  assistantTitle?.trim() || chat.title?.trim() || 'Untitled chat'
 
-const getStatusClassName = (status?: ChatMetadata['status']): string => {
-  if (status === 'streaming') {
-    return 'bg-secondary text-secondary-foreground'
-  }
-
-  if (status === 'error') {
-    return 'bg-red-500/15 text-red-200'
-  }
-
-  if (status === 'cancelled') {
-    return 'bg-amber-500/15 text-amber-200'
-  }
-
-  return 'bg-muted text-muted-foreground'
-}
-
-const getChatTitle = (chat?: Pick<ChatMetadata, 'title'> | null): string =>
-  chat?.title?.trim() || 'Untitled chat'
-
-const getArtifactTitle = (artifact: CanvasArtifact, chat?: ChatMetadata): string =>
-  artifact.title?.trim() || artifact.name?.trim() || getChatTitle(chat)
-
-const getArtifactSubtitle = (artifact: CanvasArtifact): string =>
-  artifact.filePath?.trim() || artifact.url?.trim() || 'Canvas artifact'
-
-const getArtifactTypeLabel = (artifact: CanvasArtifact): string => {
-  const lowerName = artifact.name?.toLowerCase()
-  const lowerPath = artifact.filePath?.toLowerCase()
-
-  if (lowerName?.endsWith('.html') || lowerPath?.endsWith('.html')) {
-    return 'HTML artifact'
-  }
-
-  if (artifact.kind === 'image') return 'Image'
-  if (artifact.kind === 'video') return 'Video'
-  return 'Artifact'
-}
-
-const ArtifactIcon = ({ artifact }: { artifact: CanvasArtifact }): JSX.Element => {
-  const lowerName = artifact.name?.toLowerCase()
-  const lowerPath = artifact.filePath?.toLowerCase()
-
-  if (lowerName?.endsWith('.html') || lowerPath?.endsWith('.html')) {
-    return <FileCode2 className="h-4 w-4" />
-  }
-
-  if (artifact.kind === 'image') {
-    return <ImageIcon className="h-4 w-4" />
-  }
-
-  if (artifact.kind === 'video') {
-    return <Video className="h-4 w-4" />
-  }
-
-  return <AppWindow className="h-4 w-4" />
-}
-
-const ChatHistoryCard = ({
-  chat,
+const ActiveRunCard = ({
+  title,
+  activeStep,
+  preview,
+  updatedAt,
   onClick
 }: {
-  chat: ChatMetadata
+  title: string
+  activeStep?: string | null
+  preview?: string | null
+  updatedAt: number
   onClick: () => void
-}): JSX.Element => {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className="rounded-2xl border border-border bg-card px-4 py-3 text-left shadow-sm transition hover:bg-accent"
-    >
-      <div className="truncate text-sm font-medium text-foreground">
-        {chat.title?.trim() || 'Untitled chat'}
-      </div>
-      <div className="mt-1 text-xs text-muted-foreground">
-        Updated {formatTimestamp(chat.updatedAt)}
-      </div>
-      <div className="mt-2 flex items-center gap-2 text-[11px] uppercase tracking-[0.14em] text-muted-foreground">
-        <span
-          className={`rounded-full px-2 py-0.5 font-medium tracking-[0.08em] ${getStatusClassName(chat.status)}`}
-        >
-          {getStatusLabel(chat.status)}
-        </span>
-        <span aria-hidden="true">•</span>
-        <span className="font-mono normal-case tracking-normal text-muted-foreground">
-          {chat.id.slice(0, 8)}
-        </span>
-      </div>
-    </button>
-  )
-}
-
-const ArtifactCard = ({
-  entry,
-  chat,
-  onClick
-}: {
-  entry: ChatCanvasArtifact
-  chat?: ChatMetadata
-  onClick: () => void
-}): JSX.Element => {
-  const { artifact } = entry
-
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className="rounded-2xl border border-border bg-card px-4 py-4 text-left shadow-sm transition hover:bg-accent"
-    >
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <div className="flex items-center gap-2 text-xs uppercase tracking-[0.14em] text-muted-foreground">
-            <ArtifactIcon artifact={artifact} />
-            <span>{getArtifactTypeLabel(artifact)}</span>
-          </div>
-          <div className="mt-2 truncate text-sm font-medium text-foreground">
-            {getArtifactTitle(artifact, chat)}
-          </div>
+}): JSX.Element => (
+  <button
+    type="button"
+    onClick={onClick}
+    className="rounded-3xl border border-border bg-card px-4 py-4 text-left shadow-sm transition hover:bg-accent"
+  >
+    <div className="flex items-start justify-between gap-3">
+      <div className="min-w-0">
+        <div className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
+          Active run
         </div>
-        <span className="rounded-full bg-secondary px-2 py-0.5 text-[11px] font-medium text-secondary-foreground">
-          Open
-        </span>
+        <div className="mt-2 truncate text-sm font-medium text-foreground">{title}</div>
+        {activeStep ? (
+          <div className="mt-1 truncate text-xs text-muted-foreground">{activeStep}</div>
+        ) : null}
       </div>
-      <div className="mt-2 line-clamp-2 break-all text-xs text-muted-foreground">
-        {getArtifactSubtitle(artifact)}
-      </div>
-      <div className="mt-3 flex items-center gap-2 text-[11px] uppercase tracking-[0.14em] text-muted-foreground">
-        <span>Built {formatTimestamp(entry.createdAt)}</span>
-        <span aria-hidden="true">•</span>
-        <span className="truncate normal-case tracking-normal">{getChatTitle(chat)}</span>
-      </div>
-    </button>
-  )
-}
+      <span className="shrink-0 rounded-full bg-secondary px-2.5 py-1 text-[11px] font-medium uppercase tracking-[0.08em] text-secondary-foreground">
+        Running
+      </span>
+    </div>
+
+    {preview ? (
+      <div className="mt-3 line-clamp-2 text-xs text-muted-foreground">{preview}</div>
+    ) : null}
+    <div className="mt-3 text-xs text-muted-foreground">Updated {formatTimestamp(updatedAt)}</div>
+  </button>
+)
 
 type HomeProps = {
   onOpenAgents: () => void
+  onOpenAssistant: () => void
   onOpenHeartbeats: () => void
 }
 
-const Home = ({ onOpenAgents, onOpenHeartbeats }: HomeProps): JSX.Element => {
+const Home = ({ onOpenAgents, onOpenAssistant, onOpenHeartbeats }: HomeProps): JSX.Element => {
   const chatHistory = useChatStore((state) => state.chatHistory)
-  const canvasArtifactsByChatId = useCanvasStore((state) => state.artifactsByChatId)
-  const upcomingCrons = useCronStore((state) => state.upcomingCrons)
   const activeHeartbeatRunId = useHeartbeatStore((state) => state.activeRunId)
   const lastHeartbeatRunId = useHeartbeatStore((state) => state.lastRunId)
   const heartbeatRunsById = useHeartbeatStore((state) => state.runsById)
-  const notifications = useNotificationStore((state) => state.notifications)
-  const dismissNotification = useNotificationStore((state) => state.dismissNotification)
+  const assistantsByChatId = useAssistantStore((state) => state.assistantsByChatId)
   const connectionState = useSocketStore((state) => state.connectionState)
   const {
     attachments,
-    canStop,
     handleKeyDown,
-    handleStop,
     isRunning,
     isUploading,
     removeAttachment,
@@ -202,24 +94,15 @@ const Home = ({ onOpenAgents, onOpenHeartbeats }: HomeProps): JSX.Element => {
     disabled: isUploading,
     onFilesDropped: uploadFiles
   })
-  const recentChats = [...chatHistory].sort((a, b) => b.updatedAt - a.updatedAt).slice(0, 6)
-  const artifacts = useMemo(
-    () =>
-      Object.values(canvasArtifactsByChatId)
-        .filter((entry): entry is ChatCanvasArtifact => Boolean(entry))
-        .sort((left, right) => right.createdAt - left.createdAt),
-    [canvasArtifactsByChatId]
-  )
-  const chatHistoryById = useMemo(
-    () => new Map(chatHistory.map((entry) => [entry.id, entry])),
-    [chatHistory]
-  )
-  const visibleUpcomingCrons = useMemo(() => upcomingCrons.slice(0, 6), [upcomingCrons])
   const activeHeartbeat = activeHeartbeatRunId
     ? (heartbeatRunsById[activeHeartbeatRunId] ?? null)
     : null
   const lastHeartbeat = lastHeartbeatRunId ? (heartbeatRunsById[lastHeartbeatRunId] ?? null) : null
   const topHeartbeat = activeHeartbeat ?? lastHeartbeat
+  const activeRuns = useMemo(
+    () => [...chatHistory].filter((chat) => chat.status === 'streaming'),
+    [chatHistory]
+  )
 
   const handleLoadChat = (chatId: string): void => {
     window.api.sendSocketMessage({
@@ -227,16 +110,6 @@ const Home = ({ onOpenAgents, onOpenHeartbeats }: HomeProps): JSX.Element => {
       data: chatId
     })
     onOpenAgents()
-  }
-
-  const handleDismissNotification = (notificationId: string): void => {
-    dismissNotification(notificationId)
-    window.api.sendSocketMessage({
-      type: 'notification.dismiss',
-      data: {
-        id: notificationId
-      }
-    })
   }
 
   return (
@@ -288,11 +161,9 @@ const Home = ({ onOpenAgents, onOpenHeartbeats }: HomeProps): JSX.Element => {
                 onChange={setValue}
                 onKeyDown={handleKeyDown}
                 onFilesSelected={uploadFiles}
-                onStop={handleStop}
                 attachments={attachments}
                 isUploading={isUploading}
                 isRunning={isRunning}
-                canStop={canStop}
                 onRemoveAttachment={removeAttachment}
                 uploadError={uploadError}
                 placeholder="Ask your computer"
@@ -304,93 +175,44 @@ const Home = ({ onOpenAgents, onOpenHeartbeats }: HomeProps): JSX.Element => {
         </section>
 
         <section className="w-full max-w-3xl">
-          <div className="mb-3 flex items-center justify-between">
-            <h2 className="text-sm font-medium text-foreground">Artifacts</h2>
-            <span className="text-xs text-muted-foreground">{artifacts.length} saved</span>
-          </div>
-
-          {artifacts.length > 0 ? (
-            <div className="grid gap-3 sm:grid-cols-2">
-              {artifacts.map((entry) => (
-                <ArtifactCard
-                  key={entry.chatId}
-                  entry={entry}
-                  chat={chatHistoryById.get(entry.chatId)}
-                  onClick={() => handleLoadChat(entry.chatId)}
-                />
-              ))}
+          <button
+            type="button"
+            onClick={onOpenAssistant}
+            className="w-full rounded-3xl border border-border bg-card px-4 py-4 text-left shadow-sm transition hover:bg-accent"
+          >
+            <div className="text-sm font-medium text-foreground">Make a new assistant</div>
+            <div className="mt-1 text-sm text-muted-foreground">
+              Open the assistant page.
             </div>
-          ) : (
-            <div className="rounded-2xl border border-dashed border-border bg-card px-4 py-6 text-sm text-muted-foreground">
-              Canvas artifacts from your chats will appear here so you can jump back into them.
-            </div>
-          )}
+          </button>
         </section>
 
         <section className="w-full max-w-3xl">
-          <div className="mb-3 flex items-center justify-between">
-            <h2 className="text-sm font-medium text-foreground">Upcoming Crons</h2>
-            <span className="text-xs text-muted-foreground">{upcomingCrons.length} active</span>
+          <div className="mb-4">
+            <h2 className="text-sm font-medium text-foreground">Active runs</h2>
           </div>
 
-          {visibleUpcomingCrons.length > 0 ? (
+          {activeRuns.length > 0 ? (
             <div className="grid gap-3 sm:grid-cols-2">
-              {visibleUpcomingCrons.map((cron) => (
-                <UpcomingCronCard key={cron.id} cron={cron} />
-              ))}
-            </div>
-          ) : (
-            <div className="rounded-2xl border border-dashed border-border bg-card px-4 py-6 text-sm text-muted-foreground">
-              No upcoming cron jobs.
-            </div>
-          )}
-        </section>
-
-        <section className="w-full max-w-3xl">
-          <div className="mb-3 flex items-center justify-between">
-            <h2 className="text-sm font-medium text-foreground">Notifications</h2>
-            <span className="text-xs text-muted-foreground">{notifications.length} active</span>
-          </div>
-
-          {notifications.length > 0 ? (
-            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-              {notifications.map((notification) => (
-                <NotificationCard
-                  key={notification.id}
-                  notification={notification}
-                  onDismiss={handleDismissNotification}
-                />
-              ))}
-            </div>
-          ) : (
-            <div className="rounded-2xl border border-dashed border-border bg-card px-4 py-6 text-sm text-muted-foreground">
-              No active notifications.
-            </div>
-          )}
-        </section>
-
-        <section className="w-full max-w-3xl">
-          <div className="mb-3 flex items-center justify-between">
-            <h2 className="text-sm font-medium text-foreground">Recent Chats</h2>
-            <span className="text-xs text-muted-foreground">{chatHistory.length} stored</span>
-          </div>
-
-          {recentChats.length > 0 ? (
-            <div className="grid gap-3 sm:grid-cols-2">
-              {recentChats.map((chat) => (
-                <ChatHistoryCard
+              {activeRuns.map((chat) => (
+                <ActiveRunCard
                   key={chat.id}
-                  chat={chat}
+                  title={getRunTitle(chat, assistantsByChatId[chat.id]?.title)}
+                  activeStep={chat.activeStep}
+                  preview={chat.preview}
+                  updatedAt={chat.updatedAt}
                   onClick={() => handleLoadChat(chat.id)}
                 />
               ))}
             </div>
           ) : (
-            <div className="rounded-2xl border border-dashed border-border bg-card px-4 py-6 text-sm text-muted-foreground">
-              No previous chats yet.
+            <div className="rounded-3xl border border-dashed border-border bg-card px-4 py-6 text-sm text-muted-foreground">
+              No active runs right now. When an agent is running, it will appear here.
             </div>
           )}
         </section>
+
+        {/* Home feed sections temporarily hidden: artifacts, crons, notifications, recent chats. */}
       </div>
     </div>
   )

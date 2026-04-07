@@ -1,6 +1,7 @@
 import type { CSSProperties, JSX } from 'react'
 import { useState } from 'react'
 import Agents from '../../pages/agents/Agents'
+import Assistant from '../../pages/assistants/Assistant'
 import Heartbeats from '../../pages/heartbeats/Heartbeats'
 import Home from '../../pages/home/Home'
 import Plugins from '../../pages/plugins/Plugins'
@@ -13,6 +14,9 @@ type MainWindowView =
     }
   | {
       type: 'heartbeats'
+    }
+  | {
+      type: 'assistant'
     }
 
 const tabs: Array<{ id: TabId; label: string }> = [
@@ -48,9 +52,22 @@ const MainAppShell = (): JSX.Element => {
     })
   }
 
+  const handleOpenAssistant = (): void => {
+    setView({ type: 'assistant' })
+  }
+
+  const handleCloseAssistant = (): void => {
+    setView({
+      type: 'tab',
+      tab: 'home'
+    })
+  }
+
   let content: JSX.Element
   if (view.type === 'heartbeats') {
     content = <Heartbeats onBack={handleCloseHeartbeats} />
+  } else if (view.type === 'assistant') {
+    content = <Assistant onBack={handleCloseAssistant} />
   } else if (view.tab === 'agents') {
     content = <Agents />
   } else if (view.tab === 'plugins') {
@@ -60,6 +77,7 @@ const MainAppShell = (): JSX.Element => {
       <Home
         onOpenAgents={() => handleSelectTab('agents')}
         onOpenHeartbeats={handleOpenHeartbeats}
+        onOpenAssistant={handleOpenAssistant}
       />
     )
   }
@@ -80,7 +98,7 @@ const MainAppShell = (): JSX.Element => {
             {tabs.map((tab) => {
               const isActive =
                 (view.type === 'tab' && tab.id === view.tab) ||
-                (view.type === 'heartbeats' && tab.id === 'home')
+                ((view.type === 'heartbeats' || view.type === 'assistant') && tab.id === 'home')
 
               return (
                 <button
@@ -111,6 +129,8 @@ const MainAppShell = (): JSX.Element => {
           className={`flex-1 ${
             view.type === 'tab' && view.tab === 'agents'
               ? 'min-h-0 overflow-hidden'
+              : view.type === 'assistant'
+                ? 'min-h-0 overflow-hidden'
               : 'flex min-h-0 items-start justify-center overflow-y-auto pt-20 sm:pt-24'
           }`}
         >

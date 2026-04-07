@@ -40,7 +40,7 @@ const ComposerActionButton = ({
     variant === 'primary'
       ? 'bg-white text-black hover:bg-white/85'
       : variant === 'warning'
-        ? 'bg-amber-500 text-black hover:bg-amber-400'
+        ? 'bg-white text-black hover:bg-white/85'
         : 'bg-white/6 text-white/72 hover:bg-white/10 hover:text-white'
   const sizeClassName = iconOnly ? 'h-8 w-8 rounded-full px-0' : 'h-8 rounded-full px-3 text-[11px]'
 

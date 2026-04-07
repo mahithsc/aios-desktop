@@ -8,11 +8,9 @@ type HomeHeroComposerProps = {
   onChange: (value: string) => void
   onKeyDown: KeyboardEventHandler<HTMLInputElement | HTMLTextAreaElement>
   onFilesSelected: (files: File[]) => Promise<void> | void
-  onStop?: () => void
   attachments: MessageAttachment[]
   isUploading?: boolean
   isRunning?: boolean
-  canStop?: boolean
   onRemoveAttachment: (attachmentId: string) => void
   uploadError?: string | null
   placeholder?: string
@@ -38,36 +36,14 @@ const AttachmentButton = ({
   </button>
 )
 
-const StopButton = ({
-  onClick,
-  disabled
-}: {
-  onClick: () => void
-  disabled?: boolean
-}): JSX.Element => (
-  <button
-    type="button"
-    onClick={onClick}
-    disabled={disabled}
-    className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-amber-500 text-black transition hover:bg-amber-400 disabled:cursor-not-allowed disabled:bg-muted disabled:text-muted-foreground"
-    aria-label="Stop run"
-  >
-    <svg viewBox="0 0 24 24" fill="currentColor" className="h-3.5 w-3.5" aria-hidden="true">
-      <rect x="6.5" y="6.5" width="11" height="11" rx="1.5" />
-    </svg>
-  </button>
-)
-
 const HomeHeroComposer = ({
   value,
   onChange,
   onKeyDown,
   onFilesSelected,
-  onStop,
   attachments,
   isUploading = false,
   isRunning = false,
-  canStop = false,
   onRemoveAttachment,
   uploadError = null,
   placeholder = 'Ask your computer',
@@ -160,15 +136,12 @@ const HomeHeroComposer = ({
         ) : null}
 
         {isRunning || isUploading ? (
-          <div className="flex items-center justify-between gap-3 text-xs text-muted-foreground">
+          <div className="text-xs text-muted-foreground">
             <span>
               {isRunning
-                ? canStop
-                  ? 'Agent is running'
-                  : 'Starting run...'
+                ? 'Agent is running'
                 : 'Uploading files...'}
             </span>
-            {isRunning ? <StopButton onClick={() => onStop?.()} disabled={!canStop} /> : null}
           </div>
         ) : null}
       </div>

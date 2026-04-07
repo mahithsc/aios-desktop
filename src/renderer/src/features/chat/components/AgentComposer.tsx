@@ -63,7 +63,7 @@ const StopButton = ({
     type="button"
     onClick={onClick}
     disabled={disabled}
-    className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-amber-500 text-black transition hover:bg-amber-400 disabled:cursor-not-allowed disabled:bg-muted disabled:text-muted-foreground"
+    className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white text-black transition hover:bg-white/85 disabled:cursor-not-allowed disabled:bg-muted disabled:text-muted-foreground"
     aria-label="Stop run"
   >
     <svg viewBox="0 0 24 24" fill="currentColor" className="h-3.5 w-3.5" aria-hidden="true">

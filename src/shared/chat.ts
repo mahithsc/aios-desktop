@@ -23,6 +23,9 @@ export interface ChatMetadata {
   createdAt: UnixMs
   updatedAt: UnixMs
   status?: ChatStatus
+  activeRunId?: string | null
+  activeStep?: string | null
+  preview?: string | null
 }
 
 export interface Chat extends ChatMetadata {

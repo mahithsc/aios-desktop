@@ -27,6 +27,17 @@ type UserMessageInput =
       attachments?: MessageAttachment[]
     }
 
+type ChatMetadataUpdate = {
+  chatId: string
+  createdAt?: number
+  title?: string
+  updatedAt: number
+  status?: ChatMetadata['status']
+  activeRunId?: string | null
+  activeStep?: string | null
+  preview?: string | null
+}
+
 const createUserMessage = (input: UserMessageInput): UserMessage => {
   const now = Date.now()
   const content = typeof input === 'string' ? input : input.content
@@ -89,19 +100,102 @@ const getChatTitle = (chat: Chat): string | undefined => {
   return firstUserMessage.content.trim().split('\n')[0]?.slice(0, 80)
 }
 
-const toChatMetadata = (chat: Chat): ChatMetadata => ({
-  id: chat.id,
-  title: getChatTitle(chat),
-  createdAt: chat.createdAt,
-  updatedAt: chat.updatedAt,
-  status: chat.status
-})
+const getActiveAssistantRunId = (chat: Chat): string | null => {
+  const activeMessage = [...chat.messages]
+    .reverse()
+    .find(
+      (message) =>
+        message.role === 'assistant' &&
+        (message.status === 'pending' || message.status === 'streaming') &&
+        !!message.runId
+    )
 
-const upsertChatHistory = (chatHistory: ChatMetadata[], chat: Chat): ChatMetadata[] => {
-  const nextEntry = toChatMetadata(chat)
-  const remainingEntries = chatHistory.filter((entry) => entry.id !== chat.id)
+  return activeMessage?.role === 'assistant' ? (activeMessage.runId ?? null) : null
+}
+
+const normalizeChatMetadata = (metadata: ChatMetadata): ChatMetadata => {
+  if (metadata.status !== 'streaming') {
+    return {
+      ...metadata,
+      activeRunId: null,
+      activeStep: null
+    }
+  }
+
+  return metadata
+}
+
+const toChatMetadata = (chat: Chat, existing?: ChatMetadata): ChatMetadata =>
+  normalizeChatMetadata({
+    id: chat.id,
+    title: getChatTitle(chat) ?? existing?.title,
+    createdAt: chat.createdAt,
+    updatedAt: chat.updatedAt,
+    status: chat.status,
+    activeRunId: getActiveAssistantRunId(chat) ?? existing?.activeRunId ?? null,
+    activeStep: chat.status === 'streaming' ? (existing?.activeStep ?? null) : null,
+    preview: existing?.preview ?? null
+  })
+
+const mergeChatMetadata = (
+  existing: ChatMetadata | undefined,
+  incoming: ChatMetadata
+): ChatMetadata => {
+  if (!existing) {
+    return normalizeChatMetadata(incoming)
+  }
+
+  const incomingIsNewerOrEqual = incoming.updatedAt >= existing.updatedAt
+
+  return normalizeChatMetadata({
+    id: incoming.id,
+    title: incoming.title ?? existing.title,
+    createdAt: existing.createdAt || incoming.createdAt,
+    updatedAt: incomingIsNewerOrEqual ? incoming.updatedAt : existing.updatedAt,
+    status: incomingIsNewerOrEqual
+      ? (incoming.status ?? existing.status)
+      : (existing.status ?? incoming.status),
+    activeRunId: incomingIsNewerOrEqual
+      ? (incoming.activeRunId !== undefined ? incoming.activeRunId : existing.activeRunId)
+      : existing.activeRunId,
+    activeStep: incomingIsNewerOrEqual
+      ? (incoming.activeStep !== undefined ? incoming.activeStep : existing.activeStep)
+      : existing.activeStep,
+    preview: incomingIsNewerOrEqual
+      ? (incoming.preview !== undefined ? incoming.preview : existing.preview)
+      : existing.preview
+  })
+}
+
+const upsertChatHistoryEntry = (
+  chatHistory: ChatMetadata[],
+  entry: ChatMetadata
+): ChatMetadata[] => {
+  const existing = chatHistory.find((candidate) => candidate.id === entry.id)
+  const nextEntry = mergeChatMetadata(existing, entry)
+  const remainingEntries = chatHistory.filter((candidate) => candidate.id !== entry.id)
 
   return [...remainingEntries, nextEntry].sort((left, right) => right.updatedAt - left.updatedAt)
+}
+
+const upsertChatHistory = (chatHistory: ChatMetadata[], chat: Chat): ChatMetadata[] => {
+  const existing = chatHistory.find((entry) => entry.id === chat.id)
+  return upsertChatHistoryEntry(chatHistory, toChatMetadata(chat, existing))
+}
+
+const mergeChatHistory = (
+  existingHistory: ChatMetadata[],
+  incomingHistory: ChatMetadata[]
+): ChatMetadata[] => {
+  const incomingIds = new Set(incomingHistory.map((entry) => entry.id))
+  const mergedEntries = incomingHistory.map((entry) =>
+    mergeChatMetadata(existingHistory.find((candidate) => candidate.id === entry.id), entry)
+  )
+  const unseenExistingEntries = existingHistory.filter((entry) => !incomingIds.has(entry.id))
+
+  return [...mergedEntries, ...unseenExistingEntries].sort(
+    (left, right) => right.updatedAt - left.updatedAt
+  )
 }
 
 const getAssistantMessageStatus = (event: LLMEvent): AssistantMessage['status'] => {
@@ -137,6 +231,7 @@ interface ChatStore {
   addAssistantMessageEvent: (runId: string, event: LLMEvent) => void
   setChat: (chat: Chat) => void
   setChatHistory: (chatHistory: ChatMetadata[]) => void
+  updateChatMetadata: (update: ChatMetadataUpdate) => void
   newChat: () => void
 }
 
@@ -155,8 +250,30 @@ export const useChatStore = create<ChatStore>((set) => ({
   setChatHistory: (chatHistory) =>
     set((state) => ({
       chatHistory:
-        state.chat.messages.length > 0 ? upsertChatHistory(chatHistory, state.chat) : chatHistory
+        state.chat.messages.length > 0
+          ? upsertChatHistory(mergeChatHistory(state.chatHistory, chatHistory), state.chat)
+          : mergeChatHistory(state.chatHistory, chatHistory)
     })),
+
+  updateChatMetadata: (update) =>
+    set((state) => {
+      const existing = state.chatHistory.find((entry) => entry.id === update.chatId)
+      const currentChat = state.chat.id === update.chatId ? state.chat : null
+      const nextEntry = normalizeChatMetadata({
+        id: update.chatId,
+        title: update.title ?? existing?.title ?? (currentChat ? getChatTitle(currentChat) : undefined),
+        createdAt: update.createdAt ?? existing?.createdAt ?? currentChat?.createdAt ?? update.updatedAt,
+        updatedAt: update.updatedAt,
+        status: update.status ?? existing?.status ?? currentChat?.status,
+        activeRunId: update.activeRunId,
+        activeStep: update.activeStep,
+        preview: update.preview
+      })
+
+      return {
+        chatHistory: upsertChatHistoryEntry(state.chatHistory, nextEntry)
+      }
+    }),
 
   addUserMessage: (message) =>
     set((state) => {
