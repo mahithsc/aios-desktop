@@ -14,8 +14,8 @@ import { useTypeToFocus } from '../../features/chat/hooks/useTypeToFocus'
 import { useChatStore } from '../../features/chat/store/useChatSessionStore'
 import CanvasPanel from '../../features/canvas/components/CanvasPanel'
 import { useCanvasStore } from '../../features/canvas/store/useCanvasStore'
-import { useAssistantStore } from '../../store/useAssistantStore'
 import { useFileDropTarget } from '../../shared/lib/fileDropTarget'
+import { useAssistantStore } from '../../store/useAssistantStore'
 
 const formatTimestamp = (timestamp: number): string =>
   new Intl.DateTimeFormat(undefined, {
@@ -86,8 +86,8 @@ const ChatHistoryItem = ({
 const Agents = (): JSX.Element => {
   const contentRef = useRef<HTMLElement | null>(null)
   const chatHistory = useChatStore((state) => state.chatHistory)
+  const assistantsById = useAssistantStore((state) => state.assistantsById)
   const newChat = useChatStore((state) => state.newChat)
-  const assistantsByChatId = useAssistantStore((state) => state.assistantsByChatId)
   const {
     attachments,
     canStop,
@@ -111,8 +111,11 @@ const Agents = (): JSX.Element => {
   })
 
   const previousChats = useMemo(
-    () => [...chatHistory].sort((a, b) => b.updatedAt - a.updatedAt),
-    [chatHistory]
+    () =>
+      [...chatHistory]
+        .filter((historyChat) => !assistantsById[historyChat.id])
+        .sort((a, b) => b.updatedAt - a.updatedAt),
+    [assistantsById, chatHistory]
   )
   const [canvasWidth, setCanvasWidth] = useState(480)
   const [isResizingCanvas, setIsResizingCanvas] = useState(false)
@@ -211,7 +214,7 @@ const Agents = (): JSX.Element => {
             previousChats.map((historyChat) => (
               <ChatHistoryItem
                 key={historyChat.id}
-                title={assistantsByChatId[historyChat.id]?.title || getChatTitle(historyChat)}
+                title={getChatTitle(historyChat)}
                 subtitle={`Updated ${formatTimestamp(historyChat.updatedAt)}`}
                 status={historyChat.status}
                 isActive={historyChat.id === chat.id}
@@ -231,9 +234,7 @@ const Agents = (): JSX.Element => {
           <div className="mx-auto w-full max-w-184 px-4 pb-3 sm:px-6">
             <div className="flex items-center justify-between gap-3">
               <div className="min-w-0">
-                <h1 className="truncate text-sm font-medium text-foreground">
-                  {assistantsByChatId[chat.id]?.title || getChatTitle(chat)}
-                </h1>
+                <h1 className="truncate text-sm font-medium text-foreground">{getChatTitle(chat)}</h1>
                 <div className="text-xs text-muted-foreground">
                   Updated {formatTimestamp(chat.updatedAt)}
                 </div>

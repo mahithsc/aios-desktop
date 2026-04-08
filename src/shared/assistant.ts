@@ -1,8 +1,7 @@
-import type { UnixMs } from './chat'
+import type { ChatMessage, UnixMs } from './chat'
 
 export interface Assistant {
   id: string
-  chatId: string
   title: string
   createdAt: UnixMs
   updatedAt: UnixMs
@@ -12,10 +11,18 @@ export interface Assistant {
   memoryPath: string
 }
 
-export interface AssistantInitRequest {
-  chatId: string
+export interface AssistantDetail extends Assistant {
+  messages: ChatMessage[]
+}
+
+export interface AssistantCreateRequest {
+  id: string
   title?: string | null
-  identityBody?: string | null
-  heartbeatBody?: string | null
-  memoryBody?: string | null
+  prompt: string
+}
+
+export interface AssistantSubmitRequest {
+  assistantId: string
+  messages: ChatMessage[]
+  turnId?: string | null
 }

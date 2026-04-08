@@ -22,6 +22,7 @@ export interface Run {
   createdAt: UnixMs
   updatedAt: UnixMs
   chatId?: string | null
+  assistantId?: string | null
   sourceId?: string | null
   turnId?: string | null
 }
@@ -37,6 +38,7 @@ export interface RunEvent {
   sequence: number
   createdAt: UnixMs
   chatId?: string | null
+  assistantId?: string | null
   event: RunEventPayload
 }
 
@@ -46,6 +48,7 @@ export interface RunSnapshot {
   status: RunStatus
   updatedAt: UnixMs
   chatId?: string | null
+  assistantId?: string | null
   lastSequence: number
   preview?: string | null
   activeStep?: string | null

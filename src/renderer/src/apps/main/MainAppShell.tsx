@@ -17,6 +17,7 @@ type MainWindowView =
     }
   | {
       type: 'assistant'
+      assistantId?: string | null
     }
 
 const tabs: Array<{ id: TabId; label: string }> = [
@@ -52,8 +53,8 @@ const MainAppShell = (): JSX.Element => {
     })
   }
 
-  const handleOpenAssistant = (): void => {
-    setView({ type: 'assistant' })
+  const handleOpenAssistant = (assistantId?: string | null): void => {
+    setView({ type: 'assistant', assistantId })
   }
 
   const handleCloseAssistant = (): void => {
@@ -67,7 +68,14 @@ const MainAppShell = (): JSX.Element => {
   if (view.type === 'heartbeats') {
     content = <Heartbeats onBack={handleCloseHeartbeats} />
   } else if (view.type === 'assistant') {
-    content = <Assistant onBack={handleCloseAssistant} />
+    content = (
+      <Assistant
+        key={view.assistantId ?? 'draft'}
+        assistantId={view.assistantId}
+        onBack={handleCloseAssistant}
+        onCreated={(assistantId) => handleOpenAssistant(assistantId)}
+      />
+    )
   } else if (view.tab === 'agents') {
     content = <Agents />
   } else if (view.tab === 'plugins') {
@@ -75,7 +83,6 @@ const MainAppShell = (): JSX.Element => {
   } else {
     content = (
       <Home
-        onOpenAgents={() => handleSelectTab('agents')}
         onOpenHeartbeats={handleOpenHeartbeats}
         onOpenAssistant={handleOpenAssistant}
       />

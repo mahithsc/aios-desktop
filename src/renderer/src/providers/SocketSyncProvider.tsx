@@ -9,7 +9,7 @@ import { useHeartbeatStore } from '../features/heartbeat/store/useHeartbeatStore
 import { useNotificationStore } from '../features/notifications/store/useNotificationStore'
 import {
   getChatCanvasArtifact,
-  isAssistant,
+  isAssistantDetail,
   isAssistantList,
   isChat,
   isChatHistory,
@@ -120,7 +120,9 @@ const SocketSyncProvider = ({ children }: SocketSyncProviderProps): ReactNode =>
   const updateChatMetadata = useChatStore((state) => state.updateChatMetadata)
   const setCanvasArtifact = useCanvasStore((state) => state.setCanvasArtifact)
   const setAssistants = useAssistantStore((state) => state.setAssistants)
-  const upsertAssistant = useAssistantStore((state) => state.upsertAssistant)
+  const setAssistantDetail = useAssistantStore((state) => state.setAssistantDetail)
+  const bindAssistantConversationRun = useAssistantStore((state) => state.bindAssistantRun)
+  const addAssistantConversationEvent = useAssistantStore((state) => state.addAssistantMessageEvent)
   const setUpcomingCrons = useCronStore((state) => state.setUpcomingCrons)
   const acceptHeartbeatRun = useHeartbeatStore((state) => state.acceptRun)
   const applyHeartbeatEvent = useHeartbeatStore((state) => state.applyEvent)
@@ -195,12 +197,13 @@ const SocketSyncProvider = ({ children }: SocketSyncProviderProps): ReactNode =>
         return
       }
 
-      if (socketEvent.type === 'assistant.init' && isAssistant(socketEvent.data)) {
-        upsertAssistant(socketEvent.data)
-        window.api.sendSocketMessage({
-          type: 'chat-history',
-          data: null
-        })
+      if (socketEvent.type === 'assistant.create' && isAssistantDetail(socketEvent.data)) {
+        setAssistantDetail(socketEvent.data)
+        return
+      }
+
+      if (socketEvent.type === 'assistant.get' && isAssistantDetail(socketEvent.data)) {
+        setAssistantDetail(socketEvent.data)
         return
       }
 
@@ -244,6 +247,16 @@ const SocketSyncProvider = ({ children }: SocketSyncProviderProps): ReactNode =>
 
       if (socketEvent.type === 'run.accepted' && isRun(socketEvent.data)) {
         acceptHeartbeatRun(socketEvent.data)
+        if (socketEvent.data.kind === 'chat' && socketEvent.data.assistantId) {
+          if (socketEvent.data.turnId) {
+            bindAssistantConversationRun(
+              socketEvent.data.assistantId,
+              socketEvent.data.turnId,
+              socketEvent.data.id
+            )
+          }
+          return
+        }
         if (socketEvent.data.kind === 'chat' && socketEvent.data.chatId) {
           updateChatMetadata({
             chatId: socketEvent.data.chatId,
@@ -301,14 +314,18 @@ const SocketSyncProvider = ({ children }: SocketSyncProviderProps): ReactNode =>
           type: 'assistant.list',
           data: null
         })
-        window.api.sendSocketMessage({
-          type: 'chat-history',
-          data: null
-        })
       }
 
       if (socketEvent.data.kind === 'heartbeat') {
         applyHeartbeatEvent(socketEvent.data)
+        return
+      }
+
+      if (socketEvent.data.assistantId) {
+        const assistantEvent = runEventToChatEvent(socketEvent.data)
+        if (assistantEvent) {
+          addAssistantConversationEvent(socketEvent.data.assistantId, socketEvent.data.runId, assistantEvent)
+        }
         return
       }
 
@@ -389,17 +406,19 @@ const SocketSyncProvider = ({ children }: SocketSyncProviderProps): ReactNode =>
     applyHeartbeatEvent,
     applyHeartbeatEvents,
     acceptHeartbeatRun,
+    addAssistantConversationEvent,
     bindAssistantRun,
+    bindAssistantConversationRun,
     dismissNotification,
     setCanvasArtifact,
     setAssistants,
+    setAssistantDetail,
     setChat,
     setChatHistory,
     setHeartbeatSnapshots,
     setUpcomingCrons,
     setNotifications,
-    updateChatMetadata,
-    upsertAssistant
+    updateChatMetadata
   ])
 
   return children

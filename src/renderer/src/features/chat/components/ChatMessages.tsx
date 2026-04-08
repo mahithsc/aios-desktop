@@ -594,6 +594,8 @@ const ChatMessages = ({
         return (
           <div
             key={message.id}
+            data-message-id={message.id}
+            data-message-role={message.role}
             className={`flex min-w-0 ${isAssistant ? 'justify-start' : 'justify-end'}`}
           >
             <div className={isAssistant ? assistantContainerClassName : 'max-w-md'}>
