@@ -30,7 +30,10 @@ export function createWidgetWindow(bounds: Electron.Rectangle): BrowserWindow {
 
   widgetWindow.setAlwaysOnTop(true, 'floating')
   widgetWindow.setVisibleOnAllWorkspaces(true, {
-    visibleOnFullScreen: true
+    visibleOnFullScreen: true,
+    // Prevent Electron from briefly switching the app into UIElement mode on
+    // macOS, which makes the Dock icon disappear when the widget is shown.
+    ...(process.platform === 'darwin' ? { skipTransformProcessType: true } : {})
   })
 
   if (process.platform === 'darwin') {

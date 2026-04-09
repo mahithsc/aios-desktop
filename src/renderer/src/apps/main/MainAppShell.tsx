@@ -46,6 +46,13 @@ const MainAppShell = (): JSX.Element => {
     setView({ type: 'heartbeats' })
   }
 
+  const handleOpenAgents = (): void => {
+    setView({
+      type: 'tab',
+      tab: 'agents'
+    })
+  }
+
   const handleCloseHeartbeats = (): void => {
     setView({
       type: 'tab',
@@ -83,6 +90,7 @@ const MainAppShell = (): JSX.Element => {
   } else {
     content = (
       <Home
+        onOpenAgents={handleOpenAgents}
         onOpenHeartbeats={handleOpenHeartbeats}
         onOpenAssistant={handleOpenAssistant}
       />
