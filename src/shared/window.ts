@@ -1,9 +1,13 @@
 export const WIDGET_SHORTCUT = 'CommandOrControl+\\'
 
 export const MAIN_WINDOW_MODE = 'main'
+export const OVERLAY_WINDOW_MODE = 'overlay'
 export const WIDGET_WINDOW_MODE = 'widget'
 
-export type RendererWindowMode = typeof MAIN_WINDOW_MODE | typeof WIDGET_WINDOW_MODE
+export type RendererWindowMode =
+  | typeof MAIN_WINDOW_MODE
+  | typeof OVERLAY_WINDOW_MODE
+  | typeof WIDGET_WINDOW_MODE
 
 export const RENDERER_WINDOW_MODE_QUERY_KEY = 'window'
 

@@ -35,6 +35,7 @@ export function createWidgetWindow(bounds: Electron.Rectangle): BrowserWindow {
     // macOS, which makes the Dock icon disappear when the widget is shown.
     ...(process.platform === 'darwin' ? { skipTransformProcessType: true } : {})
   })
+  widgetWindow.setContentProtection(true)
 
   if (process.platform === 'darwin') {
     widgetWindow.setWindowButtonVisibility(false)

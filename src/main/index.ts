@@ -1,10 +1,12 @@
 import { app, BrowserWindow, globalShortcut, ipcMain, Notification, screen, shell } from 'electron'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import { SocketService } from './services/SocketService'
+import { uploadAttachments, type UploadAttachmentFile } from './services/AttachmentUploadService'
+import { captureWidgetScreenshotAttachment } from './services/WidgetScreenshotService'
 import { createMainWindow } from './windows/createMainWindow'
+import { createOverlayWindow } from './windows/createOverlayWindow'
 import { createWidgetWindow } from './windows/createWidgetWindow'
 import { SERVER_URL } from '../shared/config'
-import type { MessageAttachment } from '../shared/chat'
 import type { WSEnvelope } from '../shared/ws'
 import {
   WIDGET_WINDOW_LEFT_OFFSET,
@@ -18,15 +20,13 @@ import {
 
 const socketService = new SocketService((attempt) => Math.min(1_000 * 2 ** (attempt - 1), 10_000))
 
-type UploadAttachmentFile = {
-  name: string
-  type: string
-  bytes: ArrayBuffer
-}
-
 type UploadAttachmentsPayload = {
   chatId: string
   files: UploadAttachmentFile[]
+}
+
+type CaptureWidgetScreenshotAttachmentPayload = {
+  chatId: string
 }
 
 type WidgetPosition = {
@@ -34,20 +34,8 @@ type WidgetPosition = {
   y: number
 }
 
-const getUploadErrorMessage = async (response: Response): Promise<string> => {
-  try {
-    const payload = (await response.json()) as { detail?: string }
-    if (typeof payload.detail === 'string' && payload.detail.trim()) {
-      return payload.detail
-    }
-  } catch {
-    // Ignore JSON parsing errors and fall back to the response status text.
-  }
-
-  return response.statusText || 'Attachment upload failed.'
-}
-
-const clamp = (value: number, min: number, max: number): number => Math.min(Math.max(value, min), max)
+const clamp = (value: number, min: number, max: number): number =>
+  Math.min(Math.max(value, min), max)
 
 const attachExternalLinkHandler = (targetWindow: BrowserWindow): void => {
   targetWindow.webContents.setWindowOpenHandler((details) => {
@@ -71,7 +59,10 @@ const getWidgetBoundsForDisplay = (
   const width = Math.min(bounds.width, workArea.width)
   const height = Math.min(bounds.height, getMaxWidgetHeightForDisplay(display))
   const defaultX = workArea.x + WIDGET_WINDOW_LEFT_OFFSET
-  const defaultY = Math.min(workArea.y + WIDGET_WINDOW_TOP_OFFSET, workArea.y + workArea.height - height)
+  const defaultY = Math.min(
+    workArea.y + WIDGET_WINDOW_TOP_OFFSET,
+    workArea.y + workArea.height - height
+  )
   const maxX = workArea.x + workArea.width - width
   const maxY = workArea.y + workArea.height - height
 
@@ -100,6 +91,8 @@ const getDraggedWidgetBoundsForDisplay = (
     height
   }
 }
+
+const getOverlayBoundsForDisplay = (display: Electron.Display): Electron.Rectangle => display.bounds
 
 const resizeWidgetWindowToPreferredHeight = (
   targetWindow: BrowserWindow,
@@ -154,6 +147,7 @@ const resizeWidgetWindowToHeight = (targetWindow: BrowserWindow, nextHeight: num
 
 app.whenReady().then(() => {
   let mainWindow: BrowserWindow | null = null
+  let overlayWindow: BrowserWindow | null = null
   let widgetWindow: BrowserWindow | null = null
   let lastWidgetPosition: WidgetPosition | null = null
 
@@ -167,16 +161,39 @@ app.whenReady().then(() => {
       attachExternalLinkHandler(mainWindow)
 
       mainWindow.on('closed', () => {
+        if (overlayWindow && !overlayWindow.isDestroyed()) {
+          overlayWindow.close()
+        }
+
         if (widgetWindow && !widgetWindow.isDestroyed()) {
           widgetWindow.close()
         }
 
+        overlayWindow = null
         widgetWindow = null
         mainWindow = null
       })
     }
 
     return mainWindow
+  }
+
+  const ensureOverlayWindow = (): BrowserWindow => {
+    if (overlayWindow?.isDestroyed()) {
+      overlayWindow = null
+    }
+
+    if (!overlayWindow) {
+      const display = screen.getDisplayNearestPoint(screen.getCursorScreenPoint())
+      overlayWindow = createOverlayWindow(getOverlayBoundsForDisplay(display))
+      attachExternalLinkHandler(overlayWindow)
+
+      overlayWindow.on('closed', () => {
+        overlayWindow = null
+      })
+    }
+
+    return overlayWindow
   }
 
   const ensureWidgetWindow = (): BrowserWindow => {
@@ -257,6 +274,38 @@ app.whenReady().then(() => {
 
     if (targetWidgetWindow.webContents.isLoadingMainFrame()) {
       targetWidgetWindow.webContents.once('did-finish-load', reveal)
+      return
+    }
+
+    reveal()
+  }
+
+  const syncOverlayWindowBounds = (): void => {
+    if (!overlayWindow || overlayWindow.isDestroyed()) {
+      return
+    }
+
+    const nextBounds = getOverlayBoundsForDisplay(screen.getDisplayMatching(overlayWindow.getBounds()))
+    overlayWindow.setBounds(nextBounds, false)
+  }
+
+  const showOverlayWindow = (): void => {
+    const targetOverlayWindow = ensureOverlayWindow()
+    const currentBounds = targetOverlayWindow.getBounds()
+    const nextBounds = getOverlayBoundsForDisplay(screen.getDisplayMatching(currentBounds))
+
+    targetOverlayWindow.setBounds(nextBounds, false)
+
+    const reveal = (): void => {
+      if (targetOverlayWindow.isDestroyed()) {
+        return
+      }
+
+      targetOverlayWindow.showInactive()
+    }
+
+    if (targetOverlayWindow.webContents.isLoadingMainFrame()) {
+      targetOverlayWindow.webContents.once('did-finish-load', reveal)
       return
     }
 
@@ -386,34 +435,22 @@ app.whenReady().then(() => {
       return getMaxWidgetHeightForDisplay(screen.getDisplayMatching(widgetWindow.getBounds()))
     }
 
-    return getMaxWidgetHeightForDisplay(screen.getDisplayNearestPoint(screen.getCursorScreenPoint()))
+    return getMaxWidgetHeightForDisplay(
+      screen.getDisplayNearestPoint(screen.getCursorScreenPoint())
+    )
   })
 
+  ipcMain.handle('renderer:upload-attachments', async (_event, payload: UploadAttachmentsPayload) =>
+    uploadAttachments(payload.chatId, payload.files)
+  )
+
   ipcMain.handle(
-    'renderer:upload-attachments',
-    async (_event, payload: UploadAttachmentsPayload): Promise<MessageAttachment[]> => {
-      const formData = new FormData()
-      formData.append('chatId', payload.chatId)
-
-      for (const file of payload.files) {
-        const blob = new Blob([new Uint8Array(file.bytes)], {
-          type: file.type || 'application/octet-stream'
-        })
-        formData.append('files', blob, file.name)
-      }
-
-      const response = await fetch(`${SERVER_URL}/attachments`, {
-        method: 'POST',
-        body: formData
+    'renderer:capture-widget-screenshot-attachment',
+    async (_event, payload: CaptureWidgetScreenshotAttachmentPayload) =>
+      captureWidgetScreenshotAttachment({
+        chatId: payload.chatId,
+        widgetWindow
       })
-
-      if (!response.ok) {
-        throw new Error(await getUploadErrorMessage(response))
-      }
-
-      const responsePayload = (await response.json()) as { attachments?: MessageAttachment[] }
-      return Array.isArray(responsePayload.attachments) ? responsePayload.attachments : []
-    }
   )
 
   ipcMain.on(
@@ -467,13 +504,19 @@ app.whenReady().then(() => {
     console.error('[socket] error', error)
   })
 
+  screen.on('display-added', syncOverlayWindowBounds)
+  screen.on('display-removed', syncOverlayWindowBounds)
+  screen.on('display-metrics-changed', syncOverlayWindowBounds)
+
   socketService.connect(SERVER_URL + '/ws')
   ensureMainWindow()
+  showOverlayWindow()
   registerWidgetShortcut()
 
   app.on('activate', () => {
     registerWidgetShortcut()
     const targetMainWindow = ensureMainWindow()
+    showOverlayWindow()
 
     if (targetMainWindow.isMinimized()) {
       targetMainWindow.restore()

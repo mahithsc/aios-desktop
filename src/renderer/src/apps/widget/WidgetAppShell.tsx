@@ -85,6 +85,8 @@ const WidgetAppShell = ({ onRequestClose }: WidgetAppShellProps): JSX.Element =>
     useChatAttachments(chat.id)
   const [maxWindowHeight, setMaxWindowHeight] = useState<number | null>(null)
   const [measuredIsHeightCapped, setMeasuredIsHeightCapped] = useState(false)
+  const [isCapturingScreenshot, setIsCapturingScreenshot] = useState(false)
+  const [submitError, setSubmitError] = useState<string | null>(null)
 
   const activeRunId = useMemo(() => {
     const activeMessage = [...chat.messages]
@@ -205,8 +207,8 @@ const WidgetAppShell = ({ onRequestClose }: WidgetAppShellProps): JSX.Element =>
     }
   }, [chat.messages, maxWindowHeight, shouldShowHistory, value])
 
-  const handleSubmit = (): void => {
-    if (isRunning || isUploading) {
+  const handleSubmit = async (): Promise<void> => {
+    if (isRunning || isUploading || isCapturingScreenshot) {
       return
     }
 
@@ -215,19 +217,31 @@ const WidgetAppShell = ({ onRequestClose }: WidgetAppShellProps): JSX.Element =>
       return
     }
 
-    const turnId = crypto.randomUUID()
-    addUserMessage({ content: nextValue, attachments })
-    const nextChat = useChatStore.getState().chat
-    createAssistantMessageStub(turnId)
-    window.api.sendSocketMessage({
-      type: 'chat.submit',
-      data: {
-        chat: nextChat,
-        turnId
-      }
-    })
-    clearValue()
-    clearAttachments({ revokePreviewUrls: false })
+    setSubmitError(null)
+    setIsCapturingScreenshot(true)
+
+    try {
+      const screenshotAttachment = await window.api.captureWidgetScreenshotAttachment(chat.id)
+      const nextAttachments = [...attachments, screenshotAttachment]
+      const turnId = crypto.randomUUID()
+
+      addUserMessage({ content: nextValue, attachments: nextAttachments })
+      const nextChat = useChatStore.getState().chat
+      createAssistantMessageStub(turnId)
+      window.api.sendSocketMessage({
+        type: 'chat.submit',
+        data: {
+          chat: nextChat,
+          turnId
+        }
+      })
+      clearValue()
+      clearAttachments({ revokePreviewUrls: false })
+    } catch (error) {
+      setSubmitError(error instanceof Error ? error.message : 'Desktop screenshot capture failed.')
+    } finally {
+      setIsCapturingScreenshot(false)
+    }
   }
 
   const handleNewMessage = (): void => {
@@ -240,6 +254,7 @@ const WidgetAppShell = ({ onRequestClose }: WidgetAppShellProps): JSX.Element =>
       })
     }
 
+    setSubmitError(null)
     clearValue()
     clearAttachments()
     newChat()
@@ -259,7 +274,7 @@ const WidgetAppShell = ({ onRequestClose }: WidgetAppShellProps): JSX.Element =>
   }
 
   const handleAttachClick = (): void => {
-    if (isUploading) {
+    if (isUploading || isCapturingScreenshot) {
       return
     }
 
@@ -291,7 +306,7 @@ const WidgetAppShell = ({ onRequestClose }: WidgetAppShellProps): JSX.Element =>
     }
 
     event.preventDefault()
-    handleSubmit()
+    void handleSubmit()
   }
 
   const clearWidgetDragState = (): void => {
@@ -484,11 +499,21 @@ const WidgetAppShell = ({ onRequestClose }: WidgetAppShellProps): JSX.Element =>
               </div>
             ) : null}
 
+            {submitError ? (
+              <div className="px-4 pt-2">
+                <div className="rounded-2xl border border-red-500/25 bg-red-500/12 px-3 py-2 text-[11px] text-red-200">
+                  {submitError}
+                </div>
+              </div>
+            ) : null}
+
             <div className="flex items-center justify-between gap-3 px-4 pb-3 pt-2">
               <ComposerActionButton
                 label={
                   isUploading ? (
                     'Uploading...'
+                  ) : isCapturingScreenshot ? (
+                    'Capturing...'
                   ) : (
                     <span className="inline-flex items-center gap-1.5 leading-none">
                       <svg
@@ -508,7 +533,7 @@ const WidgetAppShell = ({ onRequestClose }: WidgetAppShellProps): JSX.Element =>
                   )
                 }
                 onClick={handleAttachClick}
-                disabled={isUploading}
+                disabled={isUploading || isCapturingScreenshot}
                 className="!h-auto !rounded-none !bg-transparent px-0 hover:!bg-transparent disabled:!bg-transparent"
               />
 
@@ -559,8 +584,14 @@ const WidgetAppShell = ({ onRequestClose }: WidgetAppShellProps): JSX.Element =>
                       </svg>
                     }
                     ariaLabel="Send message"
-                    onClick={handleSubmit}
-                    disabled={isUploading || (!value.trim() && attachments.length === 0)}
+                    onClick={() => {
+                      void handleSubmit()
+                    }}
+                    disabled={
+                      isUploading ||
+                      isCapturingScreenshot ||
+                      (!value.trim() && attachments.length === 0)
+                    }
                     variant="primary"
                     iconOnly
                   />

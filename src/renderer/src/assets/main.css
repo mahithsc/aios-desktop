@@ -132,11 +132,20 @@
   }
 
   html[data-window-mode='widget'],
+  html[data-window-mode='overlay'],
   body[data-window-mode='widget'] {
     background: transparent;
   }
 
+  body[data-window-mode='overlay'] {
+    background: transparent;
+  }
+
   body[data-window-mode='widget'] {
+    overflow: hidden;
+  }
+
+  body[data-window-mode='overlay'] {
     overflow: hidden;
   }
 }

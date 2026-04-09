@@ -23,6 +23,7 @@ interface AppAPI {
   resetWidgetWindowHeight: () => void
   getWidgetMaxHeight: () => Promise<number>
   uploadAttachments: (chatId: string, files: UploadAttachmentFile[]) => Promise<MessageAttachment[]>
+  captureWidgetScreenshotAttachment: (chatId: string) => Promise<MessageAttachment>
   onSocketEvent: (listener: (event: WSEnvelope) => void) => () => void
   onSocketStateChange: (listener: (state: SocketConnectionState) => void) => () => void
   logToConsole: (

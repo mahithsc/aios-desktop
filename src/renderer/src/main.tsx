@@ -5,19 +5,30 @@ import { createRoot } from 'react-dom/client'
 import { APP_THEME_VARIABLES } from '@shared/config'
 import {
   MAIN_WINDOW_MODE,
+  OVERLAY_WINDOW_MODE,
   RENDERER_WINDOW_MODE_QUERY_KEY,
   WIDGET_WINDOW_MODE,
   type RendererWindowMode
 } from '@shared/window'
 import MainApp from './apps/main/MainApp'
+import OverlayApp from './apps/overlay/OverlayApp'
 import WidgetApp from './apps/widget/WidgetApp'
 
 const rootElement = document.documentElement
 const searchParams = new URLSearchParams(window.location.search)
 const requestedWindowMode = searchParams.get(RENDERER_WINDOW_MODE_QUERY_KEY)
 const windowMode: RendererWindowMode =
-  requestedWindowMode === WIDGET_WINDOW_MODE ? WIDGET_WINDOW_MODE : MAIN_WINDOW_MODE
-const RootApp = windowMode === WIDGET_WINDOW_MODE ? WidgetApp : MainApp
+  requestedWindowMode === WIDGET_WINDOW_MODE
+    ? WIDGET_WINDOW_MODE
+    : requestedWindowMode === OVERLAY_WINDOW_MODE
+      ? OVERLAY_WINDOW_MODE
+      : MAIN_WINDOW_MODE
+const RootApp =
+  windowMode === WIDGET_WINDOW_MODE
+    ? WidgetApp
+    : windowMode === OVERLAY_WINDOW_MODE
+      ? OverlayApp
+      : MainApp
 
 rootElement.classList.add('dark')
 rootElement.style.colorScheme = 'dark'

@@ -22,7 +22,8 @@ const api = {
   showWidgetWindow: () => ipcRenderer.send('renderer:show-widget-window'),
   hideWidgetWindow: () => ipcRenderer.send('renderer:hide-widget-window'),
   toggleWidgetWindow: () => ipcRenderer.send('renderer:toggle-widget-window'),
-  moveWidgetWindow: (position: WidgetPosition) => ipcRenderer.send('renderer:move-widget-window', position),
+  moveWidgetWindow: (position: WidgetPosition) =>
+    ipcRenderer.send('renderer:move-widget-window', position),
   resetWidgetWindowHeight: () => ipcRenderer.send('renderer:reset-widget-window-height'),
   getWidgetMaxHeight: (): Promise<number> => ipcRenderer.invoke('renderer:get-widget-max-height'),
   uploadAttachments: (
@@ -30,6 +31,8 @@ const api = {
     files: UploadAttachmentFile[]
   ): Promise<MessageAttachment[]> =>
     ipcRenderer.invoke('renderer:upload-attachments', { chatId, files }),
+  captureWidgetScreenshotAttachment: (chatId: string): Promise<MessageAttachment> =>
+    ipcRenderer.invoke('renderer:capture-widget-screenshot-attachment', { chatId }),
   logToConsole: (level: 'debug' | 'info' | 'warn' | 'error', message: string, details?: unknown) =>
     ipcRenderer.send('renderer:log', { level, message, details }),
   onSocketEvent: (listener: (event: WSEnvelope) => void) => {
