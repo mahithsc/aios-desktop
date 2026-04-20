@@ -6,9 +6,9 @@ import type {
   StreamCancelledEvent,
   StreamErrorEvent,
   SubagentToolEvent,
-  TokenEvent,
   UserMessage
 } from 'src/shared/chat'
+import InlineWidgetRenderer from './InlineWidgetRenderer'
 import Markdown from './Markdown'
 import PendingAttachmentCard from '../../attachments/components/PendingAttachmentCard'
 
@@ -28,6 +28,13 @@ type AssistantRenderItem =
       output?: string
       error?: string
       subagentEvents: SubagentToolEvent[]
+    }
+  | {
+      id: string
+      type: 'widget'
+      toolCallId: string
+      title: string
+      widget: string
     }
 
 type SubagentRenderItem =
@@ -58,10 +65,24 @@ type ChatMessagesProps = {
 
 const TOOL_PAYLOAD_PREVIEW_LIMIT = 1200
 const TOOL_INPUT_TRUNCATE = 80
+const TOOL_DISPLAY_NAMES: Record<string, string> = {
+  generative_widget: 'Generative UI'
+}
+
+type GenerativeWidgetArtifact = {
+  ok: true
+  type: 'generative_widget_artifact'
+  artifact: {
+    version: 1
+    title?: string
+    textPreview?: string
+    widget: string
+  }
+}
 
 const getAssistantText = (message: AssistantMessage): string => {
   return message.events
-    .filter((event): event is TokenEvent => event.type === 'token')
+    .filter((event) => event.type === 'token')
     .map((event) => event.value)
     .join('')
 }
@@ -94,9 +115,46 @@ const truncateToolPayload = (value?: string): string | undefined => {
   return `${value.slice(0, TOOL_PAYLOAD_PREVIEW_LIMIT)}\n...`
 }
 
+const isGenerativeWidgetArtifact = (value: unknown): value is GenerativeWidgetArtifact => {
+  if (typeof value !== 'object' || value === null) {
+    return false
+  }
+
+  const candidate = value as Record<string, unknown>
+  const artifact =
+    typeof candidate.artifact === 'object' && candidate.artifact !== null
+      ? (candidate.artifact as Record<string, unknown>)
+      : null
+
+  return (
+    candidate.ok === true &&
+    candidate.type === 'generative_widget_artifact' &&
+    artifact?.version === 1 &&
+    typeof artifact.widget === 'string'
+  )
+}
+
+const parseGenerativeWidgetArtifact = (value: unknown): GenerativeWidgetArtifact | null => {
+  if (isGenerativeWidgetArtifact(value)) {
+    return value
+  }
+
+  if (typeof value !== 'string') {
+    return null
+  }
+
+  try {
+    const parsed = JSON.parse(value) as unknown
+    return isGenerativeWidgetArtifact(parsed) ? parsed : null
+  } catch {
+    return null
+  }
+}
+
 const getAssistantRenderItems = (message: AssistantMessage): AssistantRenderItem[] => {
   const items: AssistantRenderItem[] = []
   const toolIndexById = new Map<string, number>()
+  const widgetIndexByToolId = new Map<string, number>()
   let textBuffer = ''
 
   const flushText = (): void => {
@@ -153,6 +211,10 @@ const getAssistantRenderItems = (message: AssistantMessage): AssistantRenderItem
       flushText()
 
       const existingIndex = toolIndexById.get(event.toolCallId)
+      const widgetArtifact =
+        event.type === 'tool_call_end' && event.toolName === 'generative_widget'
+          ? parseGenerativeWidgetArtifact(event.output)
+          : null
 
       if (existingIndex !== undefined) {
         const existingItem = items[existingIndex]
@@ -167,6 +229,24 @@ const getAssistantRenderItems = (message: AssistantMessage): AssistantRenderItem
                 ? truncateToolPayload(formatToolPayload(event.output))
                 : existingItem.output,
             error: event.type === 'tool_call_error' ? event.error : existingItem.error
+          }
+        }
+
+        if (widgetArtifact) {
+          const existingWidgetIndex = widgetIndexByToolId.get(event.toolCallId)
+          const widgetItem: AssistantRenderItem = {
+            id: `${event.id}-widget`,
+            type: 'widget',
+            toolCallId: event.toolCallId,
+            title: widgetArtifact.artifact.title || 'Generative UI',
+            widget: widgetArtifact.artifact.widget
+          }
+
+          if (existingWidgetIndex !== undefined) {
+            items[existingWidgetIndex] = widgetItem
+          } else {
+            widgetIndexByToolId.set(event.toolCallId, items.length)
+            items.push(widgetItem)
           }
         }
 
@@ -186,6 +266,17 @@ const getAssistantRenderItems = (message: AssistantMessage): AssistantRenderItem
         error: event.type === 'tool_call_error' ? event.error : undefined,
         subagentEvents: []
       })
+
+      if (widgetArtifact) {
+        widgetIndexByToolId.set(event.toolCallId, items.length)
+        items.push({
+          id: `${event.id}-widget`,
+          type: 'widget',
+          toolCallId: event.toolCallId,
+          title: widgetArtifact.artifact.title || 'Generative UI',
+          widget: widgetArtifact.artifact.widget
+        })
+      }
       continue
     }
 
@@ -262,6 +353,8 @@ const getToolInputSummary = (input?: string): string | null => {
   if (oneLine.length <= TOOL_INPUT_TRUNCATE) return oneLine
   return `${oneLine.slice(0, TOOL_INPUT_TRUNCATE)}...`
 }
+
+const getToolDisplayName = (toolName: string): string => TOOL_DISPLAY_NAMES[toolName] ?? toolName
 
 const getShortRunLabel = (childRunId: string): string => `worker ${childRunId.slice(0, 8)}`
 
@@ -371,7 +464,6 @@ const ToolCallCard = ({
   darkMode: boolean
 }): JSX.Element => {
   const inputSummary = getToolInputSummary(item.input)
-  const isRunning = item.status === 'running'
   const subagentItems =
     item.toolName === 'subagent' ? getSubagentRenderItems(item.subagentEvents) : []
 
@@ -380,10 +472,10 @@ const ToolCallCard = ({
       <div
         className={`flex items-baseline gap-2 text-xs ${
           darkMode ? 'text-white/60' : 'text-stone-500'
-        } ${isRunning ? 'animate-pulse' : ''}`}
+        }`}
       >
         <span className={`font-medium ${darkMode ? 'text-white/85' : 'text-stone-700'}`}>
-          {item.toolName}
+          {getToolDisplayName(item.toolName)}
         </span>
         {inputSummary ? (
           <span className={`truncate font-mono ${darkMode ? 'text-white/45' : 'text-stone-400'}`}>
@@ -408,7 +500,7 @@ const ToolCallCard = ({
                 key={subagentItem.id}
                 className={`flex items-center gap-2 text-[11px] ${
                   darkMode ? 'text-white/55' : 'text-stone-500'
-                } ${subagentItem.status === 'running' ? 'animate-pulse' : ''}`}
+                }`}
               >
                 <span className={darkMode ? 'text-white/75' : 'text-stone-700'}>
                   {getShortRunLabel(subagentItem.childRunId)}
@@ -429,7 +521,7 @@ const ToolCallCard = ({
                 key={subagentItem.id}
                 className={`flex items-baseline gap-2 text-[11px] ${
                   darkMode ? 'text-white/50' : 'text-stone-500'
-                } ${subagentItem.status === 'running' ? 'animate-pulse' : ''}`}
+                }`}
               >
                 <span className={darkMode ? 'text-white/75' : 'text-stone-700'}>
                   {subagentItem.toolName}
@@ -456,10 +548,16 @@ const ToolCallCard = ({
   )
 }
 
+const InlineWidgetPlaceholder = ({
+  item
+}: {
+  item: Extract<AssistantRenderItem, { type: 'widget' }>
+}): JSX.Element => {
+  return <InlineWidgetRenderer widget={item.widget} widgetId={item.toolCallId} />
+}
+
 const StreamingIndicator = ({ darkMode }: { darkMode: boolean }): JSX.Element => (
-  <div
-    className={`animate-pulse text-sm font-medium ${darkMode ? 'text-white/55' : 'text-stone-400'}`}
-  >
+  <div className={`text-sm font-medium ${darkMode ? 'text-white/55' : 'text-stone-400'}`}>
     Running...
   </div>
 )
@@ -538,6 +636,8 @@ const AssistantMessageContent = ({
           <Markdown key={item.id} darkMode={darkMode}>
             {item.value}
           </Markdown>
+        ) : item.type === 'widget' ? (
+          <InlineWidgetPlaceholder key={item.id} item={item} />
         ) : (
           <ToolCallCard key={item.id} item={item} darkMode={darkMode} />
         )

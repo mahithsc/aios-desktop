@@ -136,7 +136,7 @@ const MainAppShell = (): JSX.Element => {
             className="pointer-events-auto justify-self-end rounded-full border border-border bg-card px-3 py-1.5 text-xs text-muted-foreground"
             style={noDragRegionStyle}
           >
-            GPT 5.4
+            Claude Opus 4.6
           </div>
         </header>
 

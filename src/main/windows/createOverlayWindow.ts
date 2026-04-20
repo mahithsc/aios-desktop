@@ -22,10 +22,11 @@ export function createOverlayWindow(bounds: Electron.Rectangle): BrowserWindow {
     skipTaskbar: true,
     hasShadow: false,
     acceptFirstMouse: false,
-    hiddenInMissionControl: true
+    hiddenInMissionControl: true,
+    ...(process.platform === 'darwin' ? { type: 'panel' as const } : {})
   })
 
-  overlayWindow.setAlwaysOnTop(true, process.platform === 'darwin' ? 'screen-saver' : 'normal')
+  overlayWindow.setAlwaysOnTop(true, 'floating')
   overlayWindow.setVisibleOnAllWorkspaces(true, {
     visibleOnFullScreen: true,
     ...(process.platform === 'darwin' ? { skipTransformProcessType: true } : {})

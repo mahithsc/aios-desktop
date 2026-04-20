@@ -161,16 +161,6 @@ app.whenReady().then(() => {
       attachExternalLinkHandler(mainWindow)
 
       mainWindow.on('closed', () => {
-        if (overlayWindow && !overlayWindow.isDestroyed()) {
-          overlayWindow.close()
-        }
-
-        if (widgetWindow && !widgetWindow.isDestroyed()) {
-          widgetWindow.close()
-        }
-
-        overlayWindow = null
-        widgetWindow = null
         mainWindow = null
       })
     }

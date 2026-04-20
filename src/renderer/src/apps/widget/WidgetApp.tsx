@@ -4,7 +4,7 @@ import WidgetAppShell from './WidgetAppShell'
 
 const WidgetApp = (): JSX.Element => (
   <SocketSyncProvider>
-    <WidgetAppShell onRequestClose={() => window.api.hideWidgetWindow()} />
+    <WidgetAppShell />
   </SocketSyncProvider>
 )
 

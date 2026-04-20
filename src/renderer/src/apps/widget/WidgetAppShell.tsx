@@ -15,10 +15,6 @@ import { useChatAttachments } from '../../features/attachments/hooks/useChatAtta
 const noDragRegionStyle = { WebkitAppRegion: 'no-drag' } as CSSProperties
 const WIDGET_DRAG_THRESHOLD_PX = 6
 
-type WidgetAppShellProps = {
-  onRequestClose: () => void
-}
-
 const ComposerActionButton = ({
   label,
   ariaLabel,
@@ -67,7 +63,7 @@ type WidgetDragState = {
   focusOnRelease: boolean
 }
 
-const WidgetAppShell = ({ onRequestClose }: WidgetAppShellProps): JSX.Element => {
+const WidgetAppShell = (): JSX.Element => {
   const widgetRef = useRef<HTMLElement | null>(null)
   const historyRef = useRef<HTMLDivElement | null>(null)
   const textareaRef = useRef<HTMLTextAreaElement | null>(null)
@@ -295,12 +291,6 @@ const WidgetAppShell = ({ onRequestClose }: WidgetAppShellProps): JSX.Element =>
   const handleKeyDown = (
     event: ReactKeyboardEvent<HTMLInputElement | HTMLTextAreaElement>
   ): void => {
-    if (event.key === 'Escape') {
-      event.preventDefault()
-      onRequestClose()
-      return
-    }
-
     if (event.key !== 'Enter' || event.nativeEvent.isComposing || event.shiftKey) {
       return
     }
