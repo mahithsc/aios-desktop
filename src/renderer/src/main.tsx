@@ -7,11 +7,13 @@ import {
   MAIN_WINDOW_MODE,
   OVERLAY_WINDOW_MODE,
   RENDERER_WINDOW_MODE_QUERY_KEY,
+  TRANSCRIPTION_WINDOW_MODE,
   WIDGET_WINDOW_MODE,
   type RendererWindowMode
 } from '@shared/window'
 import MainApp from './apps/main/MainApp'
 import OverlayApp from './apps/overlay/OverlayApp'
+import TranscriptionApp from './apps/transcription/TranscriptionApp'
 import WidgetApp from './apps/widget/WidgetApp'
 
 const rootElement = document.documentElement
@@ -22,13 +24,17 @@ const windowMode: RendererWindowMode =
     ? WIDGET_WINDOW_MODE
     : requestedWindowMode === OVERLAY_WINDOW_MODE
       ? OVERLAY_WINDOW_MODE
-      : MAIN_WINDOW_MODE
+      : requestedWindowMode === TRANSCRIPTION_WINDOW_MODE
+        ? TRANSCRIPTION_WINDOW_MODE
+        : MAIN_WINDOW_MODE
 const RootApp =
   windowMode === WIDGET_WINDOW_MODE
     ? WidgetApp
     : windowMode === OVERLAY_WINDOW_MODE
       ? OverlayApp
-      : MainApp
+      : windowMode === TRANSCRIPTION_WINDOW_MODE
+        ? TranscriptionApp
+        : MainApp
 
 rootElement.classList.add('dark')
 rootElement.style.colorScheme = 'dark'

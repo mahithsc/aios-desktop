@@ -195,7 +195,7 @@ const Agents = (): JSX.Element => {
           </div>
         </div>
       ) : null}
-      <aside className="flex w-64 shrink-0 flex-col border-r border-border bg-card">
+      <aside className="flex w-64 shrink-0 flex-col border-r bg-card [border-right-color:rgba(33,33,33,0.7)]">
         <div className="px-4 pb-0 pt-12 sm:pt-14">
           <button
             type="button"

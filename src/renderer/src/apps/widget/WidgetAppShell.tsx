@@ -7,10 +7,10 @@ import type {
 } from 'react'
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import PendingAttachmentCard from '../../features/attachments/components/PendingAttachmentCard'
+import { useChatAttachments } from '../../features/attachments/hooks/useChatAttachments'
 import ChatMessages from '../../features/chat/components/ChatMessages'
 import { useChatStore } from '../../features/chat/store/useChatSessionStore'
 import { useInputStore } from '../../features/chat/store/useInputStore'
-import { useChatAttachments } from '../../features/attachments/hooks/useChatAttachments'
 
 const noDragRegionStyle = { WebkitAppRegion: 'no-drag' } as CSSProperties
 const WIDGET_DRAG_THRESHOLD_PX = 6
@@ -66,10 +66,13 @@ type WidgetDragState = {
 const WidgetAppShell = (): JSX.Element => {
   const widgetRef = useRef<HTMLElement | null>(null)
   const historyRef = useRef<HTMLDivElement | null>(null)
+  const historyContentRef = useRef<HTMLDivElement | null>(null)
+  const composerRef = useRef<HTMLDivElement | null>(null)
   const textareaRef = useRef<HTMLTextAreaElement | null>(null)
   const fileInputRef = useRef<HTMLInputElement | null>(null)
   const dragStateRef = useRef<WidgetDragState | null>(null)
   const suppressNextClickRef = useRef(false)
+  const lastRequestedWidgetHeightKeyRef = useRef<string | null>(null)
   const value = useInputStore((state) => state.value)
   const setValue = useInputStore((state) => state.setValue)
   const clearValue = useInputStore((state) => state.clearValue)
@@ -167,25 +170,54 @@ const WidgetAppShell = (): JSX.Element => {
 
   useLayoutEffect(() => {
     const widget = widgetRef.current
-    const history = historyRef.current
 
-    if (!widget || !history || maxWindowHeight === null) {
+    if (!widget) {
       return
     }
 
     let animationFrameId = 0
 
-    const syncCappedState = (): void => {
-      const nextIsHeightCapped = shouldShowHistory && window.outerHeight >= maxWindowHeight - 1
+    const getNaturalWidgetHeight = (): number => {
+      if (!shouldShowHistory) {
+        return widget.scrollHeight
+      }
+
+      const history = historyRef.current
+      const historyContent = historyContentRef.current
+      const composer = composerRef.current
+
+      if (!history || !composer) {
+        return widget.scrollHeight
+      }
+
+      const historyHeight = historyContent?.scrollHeight ?? history.scrollHeight
+      const composerHeight = composer.getBoundingClientRect().height
+
+      return historyHeight + composerHeight
+    }
+
+    const syncWidgetHeight = (): void => {
+      const naturalHeight = Math.ceil(getNaturalWidgetHeight())
+      const nextIsHeightCapped =
+        shouldShowHistory && maxWindowHeight !== null && naturalHeight >= maxWindowHeight
 
       setMeasuredIsHeightCapped((current) =>
         current === nextIsHeightCapped ? current : nextIsHeightCapped
       )
+
+      const heightRequestKey = `${naturalHeight}:${maxWindowHeight ?? 'unknown'}`
+
+      if (lastRequestedWidgetHeightKeyRef.current === heightRequestKey) {
+        return
+      }
+
+      lastRequestedWidgetHeightKeyRef.current = heightRequestKey
+      window.api.resizeWidgetWindowToHeight(naturalHeight)
     }
 
     const scheduleSync = (): void => {
       window.cancelAnimationFrame(animationFrameId)
-      animationFrameId = window.requestAnimationFrame(syncCappedState)
+      animationFrameId = window.requestAnimationFrame(syncWidgetHeight)
     }
 
     scheduleSync()
@@ -195,13 +227,35 @@ const WidgetAppShell = (): JSX.Element => {
     })
 
     resizeObserver.observe(widget)
-    resizeObserver.observe(history)
+    if (historyRef.current) {
+      resizeObserver.observe(historyRef.current)
+    }
+    if (historyContentRef.current) {
+      resizeObserver.observe(historyContentRef.current)
+    }
+    if (composerRef.current) {
+      resizeObserver.observe(composerRef.current)
+    }
+    if (textareaRef.current) {
+      resizeObserver.observe(textareaRef.current)
+    }
 
     return () => {
       resizeObserver.disconnect()
       window.cancelAnimationFrame(animationFrameId)
     }
-  }, [chat.messages, maxWindowHeight, shouldShowHistory, value])
+  }, [
+    attachments.length,
+    chat.id,
+    chat.messages,
+    isCapturingScreenshot,
+    isUploading,
+    maxWindowHeight,
+    shouldShowHistory,
+    submitError,
+    uploadError,
+    value
+  ])
 
   const handleSubmit = async (): Promise<void> => {
     if (isRunning || isUploading || isCapturingScreenshot) {
@@ -427,13 +481,14 @@ const WidgetAppShell = (): JSX.Element => {
             className={isHeightCapped ? 'min-h-0 flex-1 overflow-y-auto' : 'overflow-y-visible'}
             style={noDragRegionStyle}
           >
-            <div className="px-3 pt-2">
+            <div ref={historyContentRef} className="px-3 pt-2">
               <ChatMessages messages={chat.messages} bottomSpacerClassName="h-1" darkMode compact />
             </div>
           </div>
         ) : null}
 
         <div
+          ref={composerRef}
           className={shouldShowHistory ? 'border-t border-white/6' : undefined}
           style={noDragRegionStyle}
         >

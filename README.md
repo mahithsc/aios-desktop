@@ -20,6 +20,12 @@ $ yarn
 $ yarn dev
 ```
 
+To connect the desktop client to a remote server, set `AIOS_SERVER_URL`:
+
+```bash
+$ AIOS_SERVER_URL=http://10.0.4.121:8765 yarn dev
+```
+
 ### Build
 
 ```bash

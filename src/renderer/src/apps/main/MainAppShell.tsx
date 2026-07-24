@@ -132,12 +132,7 @@ const MainAppShell = (): JSX.Element => {
             })}
           </nav>
 
-          <div
-            className="pointer-events-auto justify-self-end rounded-full border border-border bg-card px-3 py-1.5 text-xs text-muted-foreground"
-            style={noDragRegionStyle}
-          >
-            Claude Opus 4.6
-          </div>
+          <div />
         </header>
 
         <div
@@ -146,7 +141,7 @@ const MainAppShell = (): JSX.Element => {
               ? 'min-h-0 overflow-hidden'
               : view.type === 'assistant'
                 ? 'min-h-0 overflow-hidden'
-              : 'flex min-h-0 items-start justify-center overflow-y-auto pt-20 sm:pt-24'
+                : 'flex min-h-0 items-start justify-center overflow-y-auto pt-20 sm:pt-24'
           }`}
         >
           {content}

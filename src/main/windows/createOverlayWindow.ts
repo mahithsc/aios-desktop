@@ -8,7 +8,7 @@ export function createOverlayWindow(bounds: Electron.Rectangle): BrowserWindow {
     ...sharedWindowOptions,
     ...bounds,
     show: false,
-    title: 'Aios Overlay',
+    title: 'Aios Notification',
     frame: false,
     transparent: true,
     backgroundColor: '#00000000',
@@ -18,20 +18,23 @@ export function createOverlayWindow(bounds: Electron.Rectangle): BrowserWindow {
     maximizable: false,
     fullscreenable: false,
     movable: false,
-    focusable: false,
+    focusable: true,
     skipTaskbar: true,
     hasShadow: false,
-    acceptFirstMouse: false,
+    acceptFirstMouse: true,
     hiddenInMissionControl: true,
-    ...(process.platform === 'darwin' ? { type: 'panel' as const } : {})
+    ...(process.platform === 'darwin' ? { type: 'panel' as const } : {}),
+    webPreferences: {
+      ...sharedWindowOptions.webPreferences,
+      enablePreferredSizeMode: true
+    }
   })
 
-  overlayWindow.setAlwaysOnTop(true, 'floating')
+  overlayWindow.setAlwaysOnTop(true, 'status')
   overlayWindow.setVisibleOnAllWorkspaces(true, {
     visibleOnFullScreen: true,
     ...(process.platform === 'darwin' ? { skipTransformProcessType: true } : {})
   })
-  overlayWindow.setIgnoreMouseEvents(true, { forward: true })
   overlayWindow.setContentProtection(true)
 
   if (process.platform === 'darwin') {

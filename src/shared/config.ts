@@ -1,8 +1,17 @@
-export const SERVER_URL = 'http://localhost:8765'
+declare const __AIOS_SERVER_URL__: string | undefined
+
+const DEFAULT_SERVER_URL = 'http://localhost:8765'
+const configuredServerUrl =
+  typeof __AIOS_SERVER_URL__ === 'string' && __AIOS_SERVER_URL__.trim()
+    ? __AIOS_SERVER_URL__
+    : DEFAULT_SERVER_URL
+
+export const SERVER_URL = configuredServerUrl.replace(/\/$/, '')
 
 export const APP_COLORS = {
-  background: 'rgb(33 33 33)',
-  surface: 'rgb(41 41 41)',
+  background: 'rgb(0 0 0)',
+  surface: 'rgb(0 0 0)',
+  chatInput: 'rgb(33 33 33)',
   surfaceElevated: 'rgb(49 49 49)',
   surfaceHighlight: 'rgb(62 62 62)',
   border: 'rgb(74 74 74)',
@@ -29,7 +38,7 @@ export const APP_THEME_VARIABLES = {
   '--accent-foreground': APP_COLORS.textHighlighted,
   '--destructive': APP_COLORS.danger,
   '--border': APP_COLORS.border,
-  '--input': APP_COLORS.border,
+  '--input': APP_COLORS.chatInput,
   '--ring': APP_COLORS.surfaceHighlight,
   '--sidebar': APP_COLORS.surface,
   '--sidebar-foreground': APP_COLORS.text,

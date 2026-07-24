@@ -156,7 +156,7 @@ const AgentComposer = ({
 
   return (
     <div className={wrapperClasses}>
-      <div className="flex w-full max-w-184 flex-col gap-3 rounded-3xl border border-border bg-card px-3.5 py-2.5">
+      <div className="flex w-full max-w-184 flex-col gap-3 rounded-3xl border border-border bg-input px-3.5 py-2.5">
         <input
           ref={fileInputRef}
           type="file"

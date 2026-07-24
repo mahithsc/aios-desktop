@@ -25,6 +25,7 @@ import { useAssistantStore } from '../store/useAssistantStore'
 import { useSocketStore } from '../shared/store/socketStore'
 
 const CRON_REFRESH_INTERVAL_MS = 30_000
+const NOTIFICATIONS_ENABLED = false
 
 type SocketSyncProviderProps = {
   children: ReactNode
@@ -38,6 +39,28 @@ const requestHeartbeatSnapshots = (): void => {
       limit: 6
     }
   })
+}
+
+const requestInitialSocketData = (): void => {
+  window.api.sendSocketMessage({
+    type: 'assistant.list',
+    data: null
+  })
+  window.api.sendSocketMessage({
+    type: 'chat-history',
+    data: null
+  })
+  if (NOTIFICATIONS_ENABLED) {
+    window.api.sendSocketMessage({
+      type: 'notification.list',
+      data: null
+    })
+  }
+  window.api.sendSocketMessage({
+    type: 'cron.upcoming.list',
+    data: null
+  })
+  requestHeartbeatSnapshots()
 }
 
 const getChatStatusFromRunStatus = (status: RunStatus): ChatStatus => {
@@ -134,35 +157,21 @@ const SocketSyncProvider = ({ children }: SocketSyncProviderProps): ReactNode =>
   const connectionState = useSocketStore((state) => state.connectionState)
   const setConnectionState = useSocketStore((state) => state.setConnectionState)
 
-  useEffect(() => {
-    window.api.sendSocketMessage({
-      type: 'assistant.list',
-      data: null
-    })
-    window.api.sendSocketMessage({
-      type: 'chat-history',
-      data: null
-    })
-    window.api.sendSocketMessage({
-      type: 'notification.list',
-      data: null
-    })
-    window.api.sendSocketMessage({
-      type: 'cron.upcoming.list',
-      data: null
-    })
-    requestHeartbeatSnapshots()
-  }, [])
-
   useEffect(() => window.api.onSocketStateChange(setConnectionState), [setConnectionState])
 
   useEffect(() => {
-    if (connectionState === 'connected') {
-      requestHeartbeatSnapshots()
+    if (connectionState !== 'connected') {
+      return
     }
+
+    requestInitialSocketData()
   }, [connectionState])
 
   useEffect(() => {
+    if (connectionState !== 'connected') {
+      return
+    }
+
     const intervalId = window.setInterval(() => {
       window.api.sendSocketMessage({
         type: 'cron.upcoming.list',
@@ -173,7 +182,7 @@ const SocketSyncProvider = ({ children }: SocketSyncProviderProps): ReactNode =>
     return () => {
       window.clearInterval(intervalId)
     }
-  }, [])
+  }, [connectionState])
 
   useEffect(() => {
     return window.api.onSocketEvent((socketEvent) => {
@@ -212,7 +221,7 @@ const SocketSyncProvider = ({ children }: SocketSyncProviderProps): ReactNode =>
         return
       }
 
-      if (socketEvent.type === 'notification.list') {
+      if (NOTIFICATIONS_ENABLED && socketEvent.type === 'notification.list') {
         if (isNotificationListResponse(socketEvent.data)) {
           setNotifications(socketEvent.data.notifications)
         } else {
@@ -230,12 +239,20 @@ const SocketSyncProvider = ({ children }: SocketSyncProviderProps): ReactNode =>
         return
       }
 
-      if (socketEvent.type === 'notification.created' && isNotification(socketEvent.data)) {
+      if (
+        NOTIFICATIONS_ENABLED &&
+        socketEvent.type === 'notification.created' &&
+        isNotification(socketEvent.data)
+      ) {
         addNotification(socketEvent.data)
         return
       }
 
-      if (socketEvent.type === 'notification.dismiss' && isNotification(socketEvent.data)) {
+      if (
+        NOTIFICATIONS_ENABLED &&
+        socketEvent.type === 'notification.dismiss' &&
+        isNotification(socketEvent.data)
+      ) {
         dismissNotification(socketEvent.data.id)
         return
       }
@@ -324,7 +341,11 @@ const SocketSyncProvider = ({ children }: SocketSyncProviderProps): ReactNode =>
       if (socketEvent.data.assistantId) {
         const assistantEvent = runEventToChatEvent(socketEvent.data)
         if (assistantEvent) {
-          addAssistantConversationEvent(socketEvent.data.assistantId, socketEvent.data.runId, assistantEvent)
+          addAssistantConversationEvent(
+            socketEvent.data.assistantId,
+            socketEvent.data.runId,
+            assistantEvent
+          )
         }
         return
       }
