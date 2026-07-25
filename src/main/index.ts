@@ -1,6 +1,6 @@
 import { app, BrowserWindow, ipcMain, Notification } from 'electron'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
-import { SocketService } from './services/SocketService'
+import { BoxClient } from './services/BoxClient'
 import { DiscoveryService } from './services/DiscoveryService'
 import { AuthService } from './services/AuthService'
 import { PairingService } from './services/PairingService'
@@ -10,7 +10,6 @@ import type { MessageAttachment } from '../shared/chat'
 import type { WSEnvelope } from '../shared/ws'
 import type { CommandResult } from '../shared/device'
 
-const socketService = new SocketService((attempt) => Math.min(1_000 * 2 ** (attempt - 1), 10_000))
 const discovery = new DiscoveryService()
 const authService = new AuthService()
 const pairingService = new PairingService(authService, discovery)
@@ -62,17 +61,25 @@ const resolveBoxTarget = async (): Promise<BoxTarget | null> => {
   return null
 }
 
+// Box events (chat streams, notification pushes, etc.) flow out through this.
+// Assigned once the window + native-notification helper exist (in whenReady).
+let dispatchBoxEvent: (message: WSEnvelope) => void = () => {}
+
+// HTTP/SSE replacement for the retired box WebSocket. Speaks the same envelope
+// surface the renderer expects, but over the box's HTTP routes + `/message` SSE.
+const boxClient = new BoxClient({
+  resolveTarget: resolveBoxTarget,
+  getLocalToken: () => pairingService.getLocalToken(),
+  emit: (message) => dispatchBoxEvent(message)
+})
+
 /**
- * (Re)connect the box WebSocket with the pairing `local_token`, using the LAN
- * or public tunnel URL. No-ops when unpaired or when the box is unreachable.
+ * Begin talking to the paired box: start polling it for new notifications
+ * (replaces the old `/ws` push). No-ops when unpaired or unreachable.
  */
-const connectBoxSocket = async (): Promise<void> => {
-  const token = pairingService.getLocalToken()
-  if (!token) return
-  const target = await resolveBoxTarget()
-  if (!target) return
-  const wsBase = target.url.replace(/^http/, 'ws')
-  socketService.connect(`${wsBase}/ws?token=${encodeURIComponent(token)}`)
+const startBoxClient = async (): Promise<void> => {
+  if (!pairingService.getLocalToken()) return
+  boxClient.start()
 }
 
 const commandErrorText = async (res: Response): Promise<string> => {
@@ -246,9 +253,9 @@ app.whenReady().then(async () => {
     await authService.ensureFreshToken()
     const result = await pairingService.pair(deviceId)
     if (result.ok) {
-      // Now that we hold a local_token, connect the box socket (it's rejected
-      // while unpaired).
-      await connectBoxSocket()
+      // Now that we hold a local_token, start talking to the box (its routes
+      // are rejected while unpaired).
+      await startBoxClient()
     }
     return result
   })
@@ -256,8 +263,8 @@ app.whenReady().then(async () => {
   ipcMain.handle('pair:unpair', async () => {
     await authService.ensureFreshToken()
     const result = await pairingService.unpair()
-    // Drop the box chat socket; the app returns to the pairing screen.
-    socketService.disconnect()
+    // Stop polling / streaming from the box; the app returns to pairing.
+    boxClient.stop()
     return result
   })
 
@@ -277,8 +284,8 @@ app.whenReady().then(async () => {
   })
 
   ipcMain.on('renderer:send-socket-message', (_event, envelope: WSEnvelope) => {
-    socketService.send(envelope)
-    console.log(`[renderer] Sent socket message: ${envelope.type}`)
+    void boxClient.send(envelope)
+    console.log(`[renderer] Box message: ${envelope.type}`)
   })
 
   ipcMain.handle(
@@ -342,8 +349,12 @@ app.whenReady().then(async () => {
     }
   )
 
-  socketService.onMessage((message) => {
-    console.log(`[socket] event -> ${message.type}`, message)
+  // Fan a box event out to the renderer(s), and raise a native notification
+  // when the box reports a new one.
+  dispatchBoxEvent = (message: WSEnvelope): void => {
+    if (is.dev) {
+      console.log(`[box] event -> ${message.type}`)
+    }
 
     if (message.type === 'notification.created') {
       showNativeNotification(message.data.title, message.data.body)
@@ -352,23 +363,13 @@ app.whenReady().then(async () => {
     for (const window of BrowserWindow.getAllWindows()) {
       window.webContents.send('main:socket-event', message)
     }
-  })
-
-  socketService.onStateChange((state) => {
-    if (is.dev) {
-      console.log(`[socket] state -> ${state}`)
-    }
-  })
-
-  socketService.onError((error) => {
-    console.error('[socket] error', error)
-  })
+  }
 
   // Let LAN discovery settle so an at-home box is preferred over the tunnel.
   await discovery.waitForFirst(2_500)
 
-  // Only connects if already paired; otherwise we connect right after pairing.
-  await connectBoxSocket()
+  // Only starts if already paired; otherwise it starts right after pairing.
+  await startBoxClient()
   mainWindow = createMainWindow()
 
   app.on('activate', function () {
@@ -390,7 +391,7 @@ app.on('window-all-closed', () => {
 })
 
 app.on('before-quit', () => {
-  socketService.destroy()
+  boxClient.stop()
   discovery.stop()
 })
 
