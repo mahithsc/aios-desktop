@@ -1,5 +1,22 @@
-// export const SERVER_URL = 'http://10.0.0.74:8765'
+// Fallback box address when LAN discovery finds nothing (see main-process
+// DiscoveryService / serverEndpoint). The box's real address is normally
+// resolved at runtime via mDNS.
 export const SERVER_URL = 'http://localhost:8765'
+
+// aios-cloud relay + accounts service (the trust anchor). Defaults to the
+// deployed instance; the main process may override via AIOS_CLOUD_URL (e.g.
+// http://localhost:8100 for local dev).
+export const CLOUD_URL = 'https://computer.trywink.io'
+
+// Supabase project used for user auth (Google + email). These are client-side
+// (publishable) values, safe to ship in the app.
+export const SUPABASE_URL = 'https://rwpumukbzlngjbyiinoj.supabase.co'
+export const SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_itNT4oUgGfUJpkE5ROE_7Q_1_bfSRxf'
+
+// Fixed loopback port for the Google OAuth redirect. This exact URL must be in
+// the Supabase Auth "Redirect URLs" allowlist.
+export const OAUTH_REDIRECT_PORT = 8971
+export const OAUTH_REDIRECT_URL = `http://localhost:${OAUTH_REDIRECT_PORT}/callback`
 
 export const APP_COLORS = {
   background: 'rgb(33 33 33)',

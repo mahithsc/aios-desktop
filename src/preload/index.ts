@@ -2,6 +2,10 @@ import { contextBridge, ipcRenderer } from 'electron'
 import { electronAPI } from '@electron-toolkit/preload'
 import type { MessageAttachment } from '../shared/chat'
 import type { WSEnvelope } from '../shared/ws'
+import type { DiscoveredDevice } from '../shared/discovery'
+import type { AuthResult, AuthState } from '../shared/auth'
+import type { PairResult, PairState } from '../shared/pairing'
+import type { CommandResult } from '../shared/device'
 
 type UploadAttachmentFile = {
   name: string
@@ -18,6 +22,26 @@ const api = {
     files: UploadAttachmentFile[]
   ): Promise<MessageAttachment[]> =>
     ipcRenderer.invoke('renderer:upload-attachments', { chatId, files }),
+  listDevices: (): Promise<DiscoveredDevice[]> => ipcRenderer.invoke('discovery:list'),
+  auth: {
+    getState: (): Promise<AuthState> => ipcRenderer.invoke('auth:get-state'),
+    login: (email: string, password: string): Promise<AuthResult> =>
+      ipcRenderer.invoke('auth:login', { email, password }),
+    signup: (email: string, password: string): Promise<AuthResult> =>
+      ipcRenderer.invoke('auth:signup', { email, password }),
+    google: (): Promise<AuthResult> => ipcRenderer.invoke('auth:google'),
+    logout: (): Promise<void> => ipcRenderer.invoke('auth:logout')
+  },
+  pairing: {
+    getState: (): Promise<PairState> => ipcRenderer.invoke('pair:get-state'),
+    pair: (deviceId: string): Promise<PairResult> =>
+      ipcRenderer.invoke('pair:device', { deviceId }),
+    unpair: (): Promise<{ ok: boolean }> => ipcRenderer.invoke('pair:unpair')
+  },
+  device: {
+    command: (type: string, payload?: Record<string, unknown>): Promise<CommandResult> =>
+      ipcRenderer.invoke('device:command', { type, payload })
+  },
   setIgnoreMouseEvents: (ignore: boolean) =>
     ipcRenderer.send('overlay:set-ignore-mouse-events', ignore),
   logToConsole: (level: 'debug' | 'info' | 'warn' | 'error', message: string, details?: unknown) =>

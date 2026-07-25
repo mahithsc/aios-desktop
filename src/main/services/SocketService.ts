@@ -17,6 +17,8 @@ export type ReconnectDelayStrategy = (attempt: number) => number
 
 const DEFAULT_RECONNECT_DELAY_MS = 2_000
 const SOCKET_OPEN = 1
+// Cap the pre-connect buffer so a socket that never opens can't grow it forever.
+const MAX_PENDING_MESSAGES = 100
 
 export class SocketService {
   private socket: WebSocket | null = null
@@ -25,6 +27,7 @@ export class SocketService {
   private reconnectAttempt = 0
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null
   private manualDisconnect = false
+  private readonly pendingMessages: WSEnvelope[] = []
   private readonly messageListeners = new Set<MessageListener>()
   private readonly stateListeners = new Set<StateListener>()
   private readonly errorListeners = new Set<ErrorListener>()
@@ -97,11 +100,27 @@ export class SocketService {
   }
 
   send(message: WSEnvelope): void {
-    if (!this.socket || this.socket.readyState !== SOCKET_OPEN) {
-      throw new Error('Cannot send socket message before the connection is open.')
+    if (this.socket && this.socket.readyState === SOCKET_OPEN) {
+      this.socket.send(JSON.stringify(message))
+      return
     }
 
-    this.socket.send(JSON.stringify(message))
+    // Not connected yet (common right after pairing, before the box socket
+    // finishes opening). Buffer and flush on connect instead of throwing.
+    this.pendingMessages.push(message)
+    if (this.pendingMessages.length > MAX_PENDING_MESSAGES) {
+      this.pendingMessages.shift()
+    }
+  }
+
+  private flushPending(): void {
+    if (!this.socket || this.socket.readyState !== SOCKET_OPEN) {
+      return
+    }
+    const queued = this.pendingMessages.splice(0, this.pendingMessages.length)
+    for (const message of queued) {
+      this.socket.send(JSON.stringify(message))
+    }
   }
 
   onMessage(listener: MessageListener): () => void {
@@ -152,6 +171,7 @@ export class SocketService {
 
       this.reconnectAttempt = 0
       this.setState('connected')
+      this.flushPending()
     }
 
     socket.onmessage = (event) => {
