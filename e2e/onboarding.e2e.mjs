@@ -60,8 +60,9 @@ try {
   // 4. Box confirms it is now claimed by this user
   const boxInfo = await (await fetch(`${BOX_URL}/device/info`)).json()
   assert(boxInfo.paired === true, 'box does not report paired')
-  assert(boxInfo.owner_email === email, `box owner mismatch: ${boxInfo.owner_email}`)
-  console.log('STEP 4 ok: box reports paired to', boxInfo.owner_email)
+  // owner_email is intentionally NOT exposed here (public endpoint); ownership
+  // is verified via the cloud registry in STEP 5.
+  console.log('STEP 4 ok: box reports paired')
 
   // 5. Cloud registry lists the device under this account. Get a real Supabase
   // token (password grant) and present it to aios-cloud, which verifies it.

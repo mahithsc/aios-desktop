@@ -110,12 +110,21 @@ const deviceCommand = async (
         },
         body: JSON.stringify({ type, payload })
       })
-      if (!res.ok)
-        return { ok: false, error: await commandErrorText(res), transport: target.transport }
+      if (!res.ok) {
+        // Cloudflare returns 502/503/530 when the tunnel origin (the box) is
+        // down — surface that as a clean "offline" rather than a raw status.
+        const offline = res.status >= 502
+        return {
+          ok: false,
+          error: offline ? 'Device is offline' : await commandErrorText(res),
+          transport: target.transport
+        }
+      }
       const data = (await res.json()) as { ok: boolean; result?: Record<string, unknown> | null }
       return { ok: data.ok, result: data.result ?? null, transport: target.transport }
     } catch {
-      return { ok: false, error: `Could not reach the device (${target.transport})`, transport: target.transport }
+      // Connection failed entirely — box isn't reachable on this path.
+      return { ok: false, error: 'Device is offline', transport: target.transport }
     }
   }
 
