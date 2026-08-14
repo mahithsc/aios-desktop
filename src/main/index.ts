@@ -5,7 +5,7 @@ import { DiscoveryService } from './services/DiscoveryService'
 import { AuthService } from './services/AuthService'
 import { PairingService } from './services/PairingService'
 import { createMainWindow } from './windows/createMainWindow'
-import { CLOUD_URL } from '../shared/config'
+import { CLOUD_URL, SERVER_URL } from '../shared/config'
 import type { MessageAttachment } from '../shared/chat'
 import type { WSEnvelope } from '../shared/ws'
 import type { CommandResult } from '../shared/device'
@@ -53,7 +53,12 @@ type BoxTarget = { url: string; transport: 'lan' | 'remote' }
  */
 const resolveBoxTarget = async (): Promise<BoxTarget | null> => {
   const paired = pairingService.getState().device
-  if (!paired) return null
+  if (!paired) {
+    // Dev (unpackaged): no pairing — talk to the local box at SERVER_URL directly,
+    // so `yarn dev` with SKIP_AUTH lands on a working chat screen.
+    if (!app.isPackaged) return { url: SERVER_URL, transport: 'lan' }
+    return null
+  }
   const onLan = discovery.list().find((d) => d.deviceId === paired.deviceId)
   if (onLan) return { url: onLan.url, transport: 'lan' }
   const remoteUrl = await fetchRemoteUrl(paired.deviceId)
