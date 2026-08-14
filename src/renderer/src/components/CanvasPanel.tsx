@@ -58,20 +58,27 @@ const formatBytes = (sizeBytes?: number): string | null => {
 }
 
 const toCanvasSource = (artifact: CanvasArtifact): string | null => {
+  // The box's `artifact.url` is a *derived* `/session-artifacts/…` URL that can
+  // point at a directory the box doesn't actually serve — e.g. a site written to
+  // `session/<chat>/portfolio-site/` instead of `…/artifacts/`, which 404s with
+  // "Artifact not found". The desktop is co-located with the box, so when we have
+  // the artifact's real on-disk path we trust THAT: use a proper served URL when
+  // the path is one the box serves, otherwise load the file directly via file://
+  // (works regardless of which dir the box wrote it to). Fall back to the raw url
+  // only when there's no local file (e.g. genuinely external artifacts).
+  if (artifact.filePath) {
+    const servedUrl = deriveServedUrl(artifact)
+    if (servedUrl) {
+      return servedUrl
+    }
+    return `file://${encodeURI(artifact.filePath)}`
+  }
+
   if (artifact.url) {
     return artifact.url
   }
 
-  const servedUrl = deriveServedUrl(artifact)
-  if (servedUrl) {
-    return servedUrl
-  }
-
-  if (!artifact.filePath) {
-    return null
-  }
-
-  return `file://${encodeURI(artifact.filePath)}`
+  return null
 }
 
 const isMarkdownArtifact = (artifact: CanvasArtifact): boolean => {
