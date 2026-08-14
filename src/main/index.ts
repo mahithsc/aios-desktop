@@ -52,13 +52,12 @@ type BoxTarget = { url: string; transport: 'lan' | 'remote' }
  * (works off-LAN).
  */
 const resolveBoxTarget = async (): Promise<BoxTarget | null> => {
+  // Dev (unpackaged): always talk to the local box at SERVER_URL, regardless of
+  // any leftover persisted pairing, so `yarn dev` with SKIP_AUTH just works.
+  if (!app.isPackaged) return { url: SERVER_URL, transport: 'lan' }
+
   const paired = pairingService.getState().device
-  if (!paired) {
-    // Dev (unpackaged): no pairing — talk to the local box at SERVER_URL directly,
-    // so `yarn dev` with SKIP_AUTH lands on a working chat screen.
-    if (!app.isPackaged) return { url: SERVER_URL, transport: 'lan' }
-    return null
-  }
+  if (!paired) return null
   const onLan = discovery.list().find((d) => d.deviceId === paired.deviceId)
   if (onLan) return { url: onLan.url, transport: 'lan' }
   const remoteUrl = await fetchRemoteUrl(paired.deviceId)
