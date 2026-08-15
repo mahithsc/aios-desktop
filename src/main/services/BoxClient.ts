@@ -110,6 +110,10 @@ interface SessionSubscription {
 export class BoxClient {
   private readonly sessionIdByLocalId = new Map<string, string>()
   private readonly localIdBySessionId = new Map<string, string>()
+  // Live progress for background Codex jobs (codex.* events). Each job gets its
+  // own synthesized run so its activity streams as a "Codex working…" message,
+  // separate from the assistant turn that launched it (which has already ended).
+  private readonly codexRuns = new Map<string, { runId: string; chatId: string; sequence: number }>()
   private readonly subscriptions = new Map<string, SessionSubscription>()
 
   constructor(private readonly deps: BoxClientDeps) {}
@@ -401,6 +405,38 @@ export class BoxClient {
     })
   }
 
+  private emitCodexToken(jobId: string, createdAt: number, text: string): void {
+    const state = this.codexRuns.get(jobId)
+    if (!state) return
+    this.deps.emit({
+      type: 'run.event',
+      data: {
+        runId: state.runId,
+        sequence: state.sequence++,
+        createdAt,
+        chatId: state.chatId,
+        event: { type: 'token', data: { value: text } }
+      }
+    })
+  }
+
+  /** One human-readable line for a codex.progress event, or null to skip it.
+   * Surfaces command/file starts + Codex's own messages; skips the tool_end
+   * (output) phase so the feed stays clean. */
+  private formatCodexProgress(payload: Record<string, unknown>): string | null {
+    if (payload.phase === 'tool_end') return null
+    const detail = typeof payload.detail === 'string' ? payload.detail.slice(0, 200) : ''
+    if (!detail) return null
+    switch (payload.kind) {
+      case 'command':
+        return `$ ${detail}\n`
+      case 'file':
+        return `✏️  ${detail}\n`
+      default:
+        return `${detail}\n` // message
+    }
+  }
+
   private async handleRunStop(data: unknown): Promise<void> {
     const runId =
       data && typeof data === 'object' && 'runId' in data
@@ -592,6 +628,68 @@ export class BoxClient {
           context: payload.context
         })
         return
+
+      case 'codex.started': {
+        const jobId = typeof payload.job_id === 'string' ? payload.job_id : null
+        if (!jobId) return
+        const runId = randomUUID()
+        this.codexRuns.set(jobId, { runId, chatId, sequence: 0 })
+        const run: Run = {
+          id: runId,
+          kind: 'chat',
+          status: 'running',
+          createdAt,
+          updatedAt: createdAt,
+          chatId,
+          sourceId: null,
+          turnId: null
+        }
+        this.deps.emit({ type: 'run.accepted', data: run })
+        this.emitCodexToken(jobId, createdAt, '🛠️  Codex is building your app…\n')
+        return
+      }
+
+      case 'codex.progress': {
+        const jobId = typeof payload.job_id === 'string' ? payload.job_id : null
+        if (jobId) {
+          const line = this.formatCodexProgress(payload)
+          if (line) this.emitCodexToken(jobId, createdAt, line)
+        }
+        return
+      }
+
+      case 'codex.completed': {
+        const jobId = typeof payload.job_id === 'string' ? payload.job_id : null
+        if (!jobId) return
+        const done = payload.status === 'done'
+        const detail = done
+          ? typeof payload.result === 'string'
+            ? payload.result.slice(0, 300)
+            : ''
+          : typeof payload.error === 'string'
+            ? payload.error
+            : 'unknown error'
+        this.emitCodexToken(
+          jobId,
+          createdAt,
+          done ? `\n✅ Codex finished. ${detail}\n` : `\n❌ Codex failed: ${detail}\n`
+        )
+        const state = this.codexRuns.get(jobId)
+        if (state) {
+          this.deps.emit({
+            type: 'run.event',
+            data: {
+              runId: state.runId,
+              sequence: state.sequence++,
+              createdAt,
+              chatId,
+              event: { type: 'completed', data: null }
+            }
+          })
+          this.codexRuns.delete(jobId)
+        }
+        return
+      }
 
       case 'error':
         this.ensureActiveRun(sub, chatId, createdAt)
