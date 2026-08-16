@@ -110,10 +110,10 @@ interface SessionSubscription {
 export class BoxClient {
   private readonly sessionIdByLocalId = new Map<string, string>()
   private readonly localIdBySessionId = new Map<string, string>()
-  // Live progress for background Codex jobs (codex.* events). Each job gets its
-  // own synthesized run so its activity streams as a "Codex working…" message,
+  // Live progress for background Pi jobs (pi.* events). Each job gets its own
+  // synthesized run so its activity streams as a "Pi working…" message,
   // separate from the assistant turn that launched it (which has already ended).
-  private readonly codexRuns = new Map<string, { runId: string; chatId: string; sequence: number }>()
+  private readonly piRuns = new Map<string, { runId: string; chatId: string; sequence: number }>()
   private readonly subscriptions = new Map<string, SessionSubscription>()
 
   constructor(private readonly deps: BoxClientDeps) {}
@@ -405,8 +405,8 @@ export class BoxClient {
     })
   }
 
-  private emitCodexToken(jobId: string, createdAt: number, text: string): void {
-    const state = this.codexRuns.get(jobId)
+  private emitPiToken(jobId: string, createdAt: number, text: string): void {
+    const state = this.piRuns.get(jobId)
     if (!state) return
     this.deps.emit({
       type: 'run.event',
@@ -420,21 +420,59 @@ export class BoxClient {
     })
   }
 
-  /** One human-readable line for a codex.progress event, or null to skip it.
-   * Surfaces command/file starts + Codex's own messages; skips the tool_end
-   * (output) phase so the feed stays clean. */
-  private formatCodexProgress(payload: Record<string, unknown>): string | null {
-    if (payload.phase === 'tool_end') return null
-    const detail = typeof payload.detail === 'string' ? payload.detail.slice(0, 200) : ''
-    if (!detail) return null
-    switch (payload.kind) {
-      case 'command':
-        return `$ ${detail}\n`
-      case 'file':
-        return `✏️  ${detail}\n`
-      default:
-        return `${detail}\n` // message
+  /** One human-readable line for a pi.progress event, or null to skip it.
+   * Pi emits normalized RPC activity rather than the old command/file phases,
+   * so render tool starts and completed assistant messages while suppressing
+   * cumulative tool updates/results. */
+  private formatPiProgress(payload: Record<string, unknown>): string | null {
+    if (payload.kind === 'tool_update' || payload.kind === 'tool_end') return null
+
+    if (payload.kind === 'message') {
+      const detail = payload.detail
+      if (typeof detail === 'string') return detail ? `${detail.slice(0, 500)}\n` : null
+      if (detail && typeof detail === 'object' && 'content' in detail) {
+        const content = (detail as { content?: unknown }).content
+        if (typeof content === 'string') return content ? `${content.slice(0, 500)}\n` : null
+        if (Array.isArray(content)) {
+          const text = content
+            .map((block) =>
+              block &&
+              typeof block === 'object' &&
+              'text' in block &&
+              typeof block.text === 'string'
+                ? block.text
+                : ''
+            )
+            .join('')
+          return text ? `${text.slice(0, 500)}\n` : null
+        }
+      }
+      return null
     }
+
+    if (payload.kind === 'tool_start') {
+      const tool = typeof payload.tool_name === 'string' ? payload.tool_name : 'tool'
+      const input = payload.input
+      let detail = ''
+      if (input && typeof input === 'object') {
+        const args = input as Record<string, unknown>
+        const preferred = args.command ?? args.path ?? args.slug ?? args.pattern
+        detail = typeof preferred === 'string' ? preferred : JSON.stringify(args)
+      } else if (typeof input === 'string') {
+        detail = input
+      }
+      detail = detail.slice(0, 200)
+      if (tool === 'bash') return detail ? `$ ${detail}\n` : '$ bash\n'
+      if (tool === 'edit' || tool === 'write') return `✏️  ${tool}${detail ? `: ${detail}` : ''}\n`
+      if (tool === 'deploy') return `🚀 deploy${detail ? `: ${detail}` : ''}\n`
+      return `🔍 ${tool}${detail ? `: ${detail}` : ''}\n`
+    }
+
+    const detail = payload.detail
+    if (typeof detail === 'string' && detail) {
+      return `${detail.slice(0, 200)}\n`
+    }
+    return null
   }
 
   private async handleRunStop(data: unknown): Promise<void> {
@@ -629,11 +667,11 @@ export class BoxClient {
         })
         return
 
-      case 'codex.started': {
+      case 'pi.started': {
         const jobId = typeof payload.job_id === 'string' ? payload.job_id : null
         if (!jobId) return
         const runId = randomUUID()
-        this.codexRuns.set(jobId, { runId, chatId, sequence: 0 })
+        this.piRuns.set(jobId, { runId, chatId, sequence: 0 })
         const run: Run = {
           id: runId,
           kind: 'chat',
@@ -645,37 +683,49 @@ export class BoxClient {
           turnId: null
         }
         this.deps.emit({ type: 'run.accepted', data: run })
-        this.emitCodexToken(jobId, createdAt, '🛠️  Codex is building your app…\n')
+        this.emitPiToken(jobId, createdAt, '🛠️  Pi is working…\n')
         return
       }
 
-      case 'codex.progress': {
+      case 'pi.progress': {
         const jobId = typeof payload.job_id === 'string' ? payload.job_id : null
         if (jobId) {
-          const line = this.formatCodexProgress(payload)
-          if (line) this.emitCodexToken(jobId, createdAt, line)
+          const line = this.formatPiProgress(payload)
+          if (line) this.emitPiToken(jobId, createdAt, line)
         }
         return
       }
 
-      case 'codex.completed': {
+      case 'pi.completed': {
         const jobId = typeof payload.job_id === 'string' ? payload.job_id : null
         if (!jobId) return
         const done = payload.status === 'done'
+        const stopped = payload.status === 'stopped'
         const detail = done
           ? typeof payload.result === 'string'
             ? payload.result.slice(0, 300)
             : ''
           : typeof payload.error === 'string'
             ? payload.error
-            : 'unknown error'
-        this.emitCodexToken(
+            : stopped
+              ? 'stopped by request'
+              : 'unknown error'
+        this.emitPiToken(
           jobId,
           createdAt,
-          done ? `\n✅ Codex finished. ${detail}\n` : `\n❌ Codex failed: ${detail}\n`
+          done
+            ? `\n✅ Pi finished. ${detail}\n`
+            : stopped
+              ? `\n⏹️ Pi stopped: ${detail}\n`
+              : `\n❌ Pi failed: ${detail}\n`
         )
-        const state = this.codexRuns.get(jobId)
+        const state = this.piRuns.get(jobId)
         if (state) {
+          const terminalEvent = done
+            ? { type: 'completed' as const, data: null }
+            : stopped
+              ? { type: 'cancelled' as const, data: { reason: detail } }
+              : { type: 'error' as const, data: { error: detail } }
           this.deps.emit({
             type: 'run.event',
             data: {
@@ -683,10 +733,10 @@ export class BoxClient {
               sequence: state.sequence++,
               createdAt,
               chatId,
-              event: { type: 'completed', data: null }
+              event: terminalEvent
             }
           })
-          this.codexRuns.delete(jobId)
+          this.piRuns.delete(jobId)
         }
         return
       }
