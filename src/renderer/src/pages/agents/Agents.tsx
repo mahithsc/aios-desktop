@@ -301,6 +301,7 @@ const Agents = (): JSX.Element => {
           <div className="flex-1 min-h-0 overflow-y-auto">
             <div className="mx-auto w-full max-w-184 px-4 sm:px-6">
               <ChatMessages
+                chatId={chat.id}
                 messages={chat.messages}
                 bottomSpacerClassName="h-28 sm:h-32"
                 darkMode

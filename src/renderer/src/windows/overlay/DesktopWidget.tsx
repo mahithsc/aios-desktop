@@ -62,6 +62,7 @@ const DesktopWidget = (): JSX.Element => {
             className={`max-h-[80vh] overflow-y-auto ${compactMode ? 'px-3 py-2.5' : 'px-4 py-3'}`}
           >
             <ChatMessages
+              chatId={chat.id}
               messages={chat.messages}
               bottomSpacerClassName="h-0"
               darkMode={darkMode}

@@ -9,7 +9,7 @@ import type {
   UserMessage
 } from '../../shared/chat'
 import type { Run, RunEventType } from '../../shared/run'
-import type { WSEnvelope } from '../../shared/ws'
+import type { CodexInputQuestion, WSEnvelope } from '../../shared/ws'
 
 export type BoxTarget = { url: string; transport: 'lan' | 'remote' }
 
@@ -113,7 +113,10 @@ export class BoxClient {
   // Live progress for background Codex jobs (codex.* events). Each job gets its
   // own synthesized run so its activity streams as a "Codex working…" message,
   // separate from the assistant turn that launched it (which has already ended).
-  private readonly codexRuns = new Map<string, { runId: string; chatId: string; sequence: number }>()
+  private readonly codexRuns = new Map<
+    string,
+    { runId: string; chatId: string; sessionId: string; sequence: number }
+  >()
   private readonly subscriptions = new Map<string, SessionSubscription>()
 
   constructor(private readonly deps: BoxClientDeps) {}
@@ -154,6 +157,8 @@ export class BoxClient {
           return await this.handleChat(envelope)
         case 'run.stop':
           return await this.handleRunStop(envelope.data)
+        case 'codex.input.submit':
+          return await this.handleCodexInputSubmit(envelope.data)
         default:
           console.warn(`[box] unhandled message type: ${envelope.type}`)
       }
@@ -256,6 +261,7 @@ export class BoxClient {
       this.linkSession(localOrSessionId, session.id)
     }
     const localId = this.localIdFor(session.id)
+    await this.ensureSubscription(session.id)
 
     const chat: Chat = {
       id: localId,
@@ -443,6 +449,15 @@ export class BoxClient {
         ? (data as { runId?: unknown }).runId
         : undefined
     if (typeof runId !== 'string') return
+    for (const [jobId, codexRun] of this.codexRuns) {
+      if (codexRun.runId === runId) {
+        await this.boxFetch(
+          `/sessions/${encodeURIComponent(codexRun.sessionId)}/codex-jobs/${encodeURIComponent(jobId)}/cancel`,
+          { method: 'POST' }
+        )
+        return
+      }
+    }
     for (const sub of this.subscriptions.values()) {
       if (sub.activeRun?.runId === runId) {
         await this.boxFetch(`/sessions/${encodeURIComponent(sub.sessionId)}/interrupt`, {
@@ -451,6 +466,79 @@ export class BoxClient {
         return
       }
     }
+  }
+
+  private async handleCodexInputSubmit(data: unknown): Promise<void> {
+    if (!data || typeof data !== 'object') return
+    const value = data as {
+      jobId?: unknown
+      chatId?: unknown
+      answers?: unknown
+    }
+    if (
+      typeof value.jobId !== 'string' ||
+      typeof value.chatId !== 'string' ||
+      !value.answers ||
+      typeof value.answers !== 'object'
+    ) {
+      return
+    }
+    const sessionId = this.sessionIdByLocalId.get(value.chatId)
+    if (!sessionId) return
+    const res = await this.boxFetch(
+      `/sessions/${encodeURIComponent(sessionId)}/codex-jobs/${encodeURIComponent(value.jobId)}/answers`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ answers: value.answers })
+      }
+    )
+    if (res?.ok) return
+    let error = 'Failed to send your answer to Codex.'
+    try {
+      const body = (await res?.json()) as { detail?: unknown }
+      if (typeof body?.detail === 'string') error = body.detail
+    } catch {
+      // Keep the stable fallback for network/non-JSON failures.
+    }
+    this.deps.emit({
+      type: 'codex.input.failed',
+      data: { jobId: value.jobId, chatId: value.chatId, error }
+    })
+  }
+
+  private parseCodexQuestions(payload: Record<string, unknown>): CodexInputQuestion[] {
+    if (!Array.isArray(payload.questions)) return []
+    return payload.questions.flatMap((question) => {
+      if (!question || typeof question !== 'object') return []
+      const value = question as Record<string, unknown>
+      if (typeof value.id !== 'string' || typeof value.question !== 'string') return []
+      const options = Array.isArray(value.options)
+        ? value.options.flatMap((option) => {
+            if (!option || typeof option !== 'object') return []
+            const candidate = option as Record<string, unknown>
+            return typeof candidate.label === 'string'
+              ? [
+                  {
+                    label: candidate.label,
+                    description:
+                      typeof candidate.description === 'string' ? candidate.description : ''
+                  }
+                ]
+              : []
+          })
+        : null
+      return [
+        {
+          id: value.id,
+          header: typeof value.header === 'string' ? value.header : 'Codex question',
+          question: value.question,
+          isOther: value.isOther === true || value.is_other === true,
+          isSecret: value.isSecret === true || value.is_secret === true,
+          options
+        }
+      ]
+    })
   }
 
   // ---- per-session events SSE (GET /sessions/{id}/events) ----
@@ -475,6 +563,7 @@ export class BoxClient {
       closed: false
     }
     this.subscriptions.set(sessionId, sub)
+    await this.restoreCodexInputs(sub)
 
     const res = await this.boxFetch(
       `/sessions/${encodeURIComponent(sessionId)}/events?after=${cursor}`,
@@ -488,24 +577,61 @@ export class BoxClient {
     void this.consumeEventStream(sub, res.body)
   }
 
+  private async restoreCodexInputs(sub: SessionSubscription): Promise<void> {
+    const res = await this.boxFetch(`/sessions/${encodeURIComponent(sub.sessionId)}/codex-jobs`)
+    if (!res?.ok) return
+    try {
+      const jobs = (await res.json()) as Array<{
+        job_id?: unknown
+        status?: unknown
+        pending_input?: unknown
+      }>
+      for (const job of jobs) {
+        if (
+          job.status !== 'awaiting_input' ||
+          typeof job.job_id !== 'string' ||
+          !job.pending_input ||
+          typeof job.pending_input !== 'object'
+        ) {
+          continue
+        }
+        this.handleGatewayEvent(sub, {
+          id: 0,
+          session_id: sub.sessionId,
+          type: 'codex.input.requested',
+          payload: {
+            job_id: job.job_id,
+            ...(job.pending_input as Record<string, unknown>)
+          },
+          created_at: new Date().toISOString()
+        })
+      }
+    } catch {
+      // A malformed/non-JSON restore response should not prevent live SSE.
+    }
+  }
+
   /**
    * Skip replaying history the caller already has (from `/messages`) by
    * starting the live stream just past the newest event currently on record.
-   * `limit=500` bounds the lookup; if a session has more backlog than that
-   * the cursor undercounts and a handful of already-known events would be
-   * re-translated — acceptable since `chat-history` already rendered them
-   * from `/messages`, not from this stream.
+   * History is paged so long-running chats do not reconnect from an old cursor
+   * and replay thousands of already-rendered events.
    */
   private async latestEventId(sessionId: string): Promise<number> {
-    const res = await this.boxFetch(
-      `/sessions/${encodeURIComponent(sessionId)}/events/history?after=0&limit=500`
-    )
-    if (!res || !res.ok) return 0
-    try {
-      const rows = (await res.json()) as GatewayEventRow[]
-      return rows.reduce((max, row) => Math.max(max, row.id), 0)
-    } catch {
-      return 0
+    let cursor = 0
+    for (;;) {
+      const res = await this.boxFetch(
+        `/sessions/${encodeURIComponent(sessionId)}/events/history?after=${cursor}&limit=500`
+      )
+      if (!res || !res.ok) return cursor
+      try {
+        const rows = (await res.json()) as GatewayEventRow[]
+        const nextCursor = rows.reduce((max, row) => Math.max(max, row.id), cursor)
+        if (rows.length < 500 || nextCursor === cursor) return nextCursor
+        cursor = nextCursor
+      } catch {
+        return cursor
+      }
     }
   }
 
@@ -633,7 +759,7 @@ export class BoxClient {
         const jobId = typeof payload.job_id === 'string' ? payload.job_id : null
         if (!jobId) return
         const runId = randomUUID()
-        this.codexRuns.set(jobId, { runId, chatId, sequence: 0 })
+        this.codexRuns.set(jobId, { runId, chatId, sessionId: sub.sessionId, sequence: 0 })
         const run: Run = {
           id: runId,
           kind: 'chat',
@@ -658,9 +784,56 @@ export class BoxClient {
         return
       }
 
+      case 'codex.input.requested': {
+        const jobId = typeof payload.job_id === 'string' ? payload.job_id : null
+        if (!jobId) return
+        if (!this.codexRuns.has(jobId)) {
+          const runId = randomUUID()
+          this.codexRuns.set(jobId, {
+            runId,
+            chatId,
+            sessionId: sub.sessionId,
+            sequence: 0
+          })
+          this.deps.emit({
+            type: 'run.accepted',
+            data: {
+              id: runId,
+              kind: 'chat',
+              status: 'running',
+              createdAt,
+              updatedAt: createdAt,
+              chatId,
+              sourceId: null,
+              turnId: null
+            }
+          })
+        }
+        this.emitCodexToken(jobId, createdAt, '\nCodex needs your input to continue.\n')
+        this.deps.emit({
+          type: 'codex.input.requested',
+          data: {
+            jobId,
+            chatId,
+            itemId: typeof payload.item_id === 'string' ? payload.item_id : null,
+            questions: this.parseCodexQuestions(payload)
+          }
+        })
+        return
+      }
+
+      case 'codex.input.resolved': {
+        const jobId = typeof payload.job_id === 'string' ? payload.job_id : null
+        if (!jobId) return
+        this.emitCodexToken(jobId, createdAt, '\nThanks — Codex is continuing…\n')
+        this.deps.emit({ type: 'codex.input.resolved', data: { jobId, chatId } })
+        return
+      }
+
       case 'codex.completed': {
         const jobId = typeof payload.job_id === 'string' ? payload.job_id : null
         if (!jobId) return
+        this.deps.emit({ type: 'codex.input.resolved', data: { jobId, chatId } })
         const done = payload.status === 'done'
         const detail = done
           ? typeof payload.result === 'string'
@@ -676,6 +849,8 @@ export class BoxClient {
         )
         const state = this.codexRuns.get(jobId)
         if (state) {
+          const terminalType =
+            payload.status === 'cancelled' ? 'cancelled' : done ? 'completed' : 'error'
           this.deps.emit({
             type: 'run.event',
             data: {
@@ -683,7 +858,12 @@ export class BoxClient {
               sequence: state.sequence++,
               createdAt,
               chatId,
-              event: { type: 'completed', data: null }
+              event:
+                terminalType === 'cancelled'
+                  ? { type: 'cancelled', data: { reason: detail } }
+                  : terminalType === 'error'
+                    ? { type: 'error', data: { error: detail } }
+                    : { type: 'completed', data: null }
             }
           })
           this.codexRuns.delete(jobId)

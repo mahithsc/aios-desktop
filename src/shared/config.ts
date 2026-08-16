@@ -6,7 +6,7 @@ export const SERVER_URL = 'http://localhost:8765'
 // aios-cloud relay + accounts service (the trust anchor). Defaults to the
 // deployed instance; the main process may override via AIOS_CLOUD_URL (e.g.
 // http://localhost:8100 for local dev).
-export const CLOUD_URL = 'https://computer.trywink.io'
+export const CLOUD_URL = 'https://computer.winkapiserver.org'
 
 // Supabase project used for user auth (Google + email). These are client-side
 // (publishable) values, safe to ship in the app.

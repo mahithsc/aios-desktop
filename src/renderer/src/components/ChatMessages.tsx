@@ -9,6 +9,7 @@ import type {
   UserMessage
 } from 'src/shared/chat'
 import Markdown from './Markdown'
+import CodexInputCard from './CodexInputCard'
 
 type AssistantRenderItem =
   | {
@@ -29,6 +30,7 @@ type AssistantRenderItem =
 
 type ChatMessagesProps = {
   messages: ChatMessage[]
+  chatId?: string
   bottomSpacerClassName?: string
   darkMode?: boolean
   compact?: boolean
@@ -258,11 +260,7 @@ const UserAttachmentList = ({
           }`}
         >
           <span>
-            {attachment.kind === 'image'
-              ? 'Image'
-              : attachment.kind === 'audio'
-                ? 'Audio'
-                : 'File'}
+            {attachment.kind === 'image' ? 'Image' : attachment.kind === 'audio' ? 'Audio' : 'File'}
           </span>
           <span className="max-w-40 truncate">{attachment.name}</span>
         </div>
@@ -353,6 +351,7 @@ const AssistantMessageContent = ({
 
 const ChatMessages = ({
   messages,
+  chatId,
   bottomSpacerClassName = 'h-40',
   darkMode = false,
   compact = false
@@ -408,6 +407,8 @@ const ChatMessages = ({
           </div>
         )
       })}
+
+      {chatId ? <CodexInputCard chatId={chatId} darkMode={darkMode} /> : null}
 
       <div className={bottomSpacerClassName} aria-hidden="true" />
     </div>

@@ -264,14 +264,18 @@ export const useChatStore = create<ChatStore>((set) => ({
         events: [...message.events, event]
       }
 
-      const chatStatus =
-        messageStatus === 'complete'
-          ? 'idle'
-          : messageStatus === 'error'
-            ? 'error'
-            : messageStatus === 'cancelled'
-              ? 'cancelled'
-            : state.chat.status
+      const hasActiveAssistant = nextMessages.some(
+        (candidate) =>
+          candidate.role === 'assistant' &&
+          (candidate.status === 'pending' || candidate.status === 'streaming')
+      )
+      const chatStatus: Chat['status'] = hasActiveAssistant
+        ? 'streaming'
+        : messageStatus === 'error'
+          ? 'error'
+          : messageStatus === 'cancelled'
+            ? 'cancelled'
+            : 'idle'
 
       const nextChat = {
         ...state.chat,

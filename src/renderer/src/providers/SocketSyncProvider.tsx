@@ -14,6 +14,7 @@ import { runEventToChatEvent } from '../lib/runEventToChatEvent'
 import { useCanvasStore } from '../store/useCanvasStore'
 import { useChatStore } from '../store/useChatSessionStore'
 import { useCronStore } from '../store/useCronStore'
+import { useCodexInputStore } from '../store/useCodexInputStore'
 import { useNotificationStore } from '../store/useNotificationStore'
 
 const CRON_REFRESH_INTERVAL_MS = 30_000
@@ -107,6 +108,25 @@ const SocketSyncProvider = ({ children }: SocketSyncProviderProps): ReactNode =>
         return
       }
 
+      if (socketEvent.type === 'codex.input.requested') {
+        useCodexInputStore.getState().setRequest(socketEvent.data)
+        return
+      }
+
+      if (socketEvent.type === 'codex.input.resolved') {
+        useCodexInputStore
+          .getState()
+          .resolveRequest(socketEvent.data.chatId, socketEvent.data.jobId)
+        return
+      }
+
+      if (socketEvent.type === 'codex.input.failed') {
+        useCodexInputStore
+          .getState()
+          .setError(socketEvent.data.chatId, socketEvent.data.jobId, socketEvent.data.error)
+        return
+      }
+
       if (socketEvent.type === 'run.accepted' && isRun(socketEvent.data)) {
         if (
           socketEvent.data.chatId === useChatStore.getState().chat.id &&
@@ -166,12 +186,16 @@ const SocketSyncProvider = ({ children }: SocketSyncProviderProps): ReactNode =>
           toolCallId: canvasArtifact.toolCallId,
           artifact: canvasArtifact.artifact
         })
-        window.api.logToConsole('debug', '[canvas] Writing canvas artifact from socket event into store.', {
-          chatId: canvasArtifact.chatId,
-          runId: canvasArtifact.runId,
-          toolCallId: canvasArtifact.toolCallId,
-          artifact: canvasArtifact.artifact
-        })
+        window.api.logToConsole(
+          'debug',
+          '[canvas] Writing canvas artifact from socket event into store.',
+          {
+            chatId: canvasArtifact.chatId,
+            runId: canvasArtifact.runId,
+            toolCallId: canvasArtifact.toolCallId,
+            artifact: canvasArtifact.artifact
+          }
+        )
         setCanvasArtifact(canvasArtifact)
       } else {
         console.debug('[canvas]', 'No canvas artifact extracted from run event.', {
