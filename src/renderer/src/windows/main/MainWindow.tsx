@@ -102,7 +102,7 @@ const MainWindow = ({ isOverlayOpen, onOpenOverlay }: MainWindowProps): JSX.Elem
               {isOverlayOpen ? 'Desktop Widget Open' : 'Open Desktop Widget'}
             </button>
             <div className="rounded-full border border-border bg-card px-4 py-2 text-sm text-muted-foreground">
-              GPT 5.4
+              GPT 5.6 · xhigh
             </div>
             <button
               type="button"
