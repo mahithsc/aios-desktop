@@ -4,7 +4,6 @@ import type { MessageAttachment } from '../shared/chat'
 import type { WSEnvelope } from '../shared/ws'
 import type { DiscoveredDevice } from '../shared/discovery'
 import type { AuthResult, AuthState } from '../shared/auth'
-import type { PairResult, PairState } from '../shared/pairing'
 import type { CommandResult } from '../shared/device'
 
 type UploadAttachmentFile = {
@@ -31,12 +30,6 @@ const api = {
       ipcRenderer.invoke('auth:signup', { email, password }),
     google: (): Promise<AuthResult> => ipcRenderer.invoke('auth:google'),
     logout: (): Promise<void> => ipcRenderer.invoke('auth:logout')
-  },
-  pairing: {
-    getState: (): Promise<PairState> => ipcRenderer.invoke('pair:get-state'),
-    pair: (deviceId: string): Promise<PairResult> =>
-      ipcRenderer.invoke('pair:device', { deviceId }),
-    unpair: (): Promise<{ ok: boolean }> => ipcRenderer.invoke('pair:unpair')
   },
   device: {
     command: (type: string, payload?: Record<string, unknown>): Promise<CommandResult> =>

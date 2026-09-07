@@ -3,66 +3,28 @@ import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import { BoxClient } from './services/BoxClient'
 import { DiscoveryService } from './services/DiscoveryService'
 import { AuthService } from './services/AuthService'
-import { PairingService } from './services/PairingService'
 import { createMainWindow } from './windows/createMainWindow'
-import { CLOUD_URL, SERVER_URL } from '../shared/config'
+import { SERVER_URL } from '../shared/config'
 import type { MessageAttachment } from '../shared/chat'
 import type { WSEnvelope } from '../shared/ws'
 import type { CommandResult } from '../shared/device'
 
 const discovery = new DiscoveryService()
 const authService = new AuthService()
-const pairingService = new PairingService(authService, discovery)
-
-const cloudBaseUrl = (): string => process.env.AIOS_CLOUD_URL ?? CLOUD_URL
-
-// Bypasses ngrok's free-tier browser interstitial for programmatic requests.
-const BOX_HEADERS = { 'ngrok-skip-browser-warning': 'true' } as const
+type BoxTarget = { url: string; transport: 'lan' }
 
 /**
- * Look up the paired box's public URL from the cloud registry: its Cloudflare
- * Tunnel subdomain (`hostname`) if provisioned, else a legacy `public_url`.
- */
-const fetchRemoteUrl = async (deviceId: string): Promise<string | null> => {
-  const accessToken = authService.getAccessToken()
-  if (!accessToken) return null
-  try {
-    const res = await fetch(`${cloudBaseUrl()}/devices`, {
-      headers: { Authorization: `Bearer ${accessToken}` }
-    })
-    if (!res.ok) return null
-    const devices = (await res.json()) as Array<{
-      device_id: string
-      hostname?: string | null
-      public_url?: string | null
-    }>
-    const device = devices.find((d) => d.device_id === deviceId)
-    if (device?.hostname) return `https://${device.hostname}`
-    return device?.public_url ?? null
-  } catch {
-    return null
-  }
-}
-
-type BoxTarget = { url: string; transport: 'lan' | 'remote' }
-
-/**
- * Resolve how to reach the paired box, local-first: its LAN address if it's
- * discoverable (mDNS), otherwise its public tunnel URL from the cloud registry
- * (works off-LAN).
+ * Resolve the dummy desktop's device directly. An explicit AIOS_BOX_URL wins,
+ * followed by the first mDNS-discovered box, then the local development URL.
  */
 const resolveBoxTarget = async (): Promise<BoxTarget | null> => {
-  // Dev (unpackaged): always talk to the local box at SERVER_URL, regardless of
-  // any leftover persisted pairing, so `yarn dev` with SKIP_AUTH just works.
-  if (!app.isPackaged) return { url: SERVER_URL, transport: 'lan' }
+  const configured = process.env.AIOS_BOX_URL?.trim()
+  if (configured) return { url: configured.replace(/\/$/, ''), transport: 'lan' }
 
-  const paired = pairingService.getState().device
-  if (!paired) return null
-  const onLan = discovery.list().find((d) => d.deviceId === paired.deviceId)
-  if (onLan) return { url: onLan.url, transport: 'lan' }
-  const remoteUrl = await fetchRemoteUrl(paired.deviceId)
-  if (remoteUrl) return { url: remoteUrl, transport: 'remote' }
-  return null
+  const discovered = discovery.list()[0]
+  if (discovered) return { url: discovered.url.replace(/\/$/, ''), transport: 'lan' }
+
+  return { url: SERVER_URL, transport: 'lan' }
 }
 
 // Box events (chat streams, notification pushes, etc.) flow out through this.
@@ -73,16 +35,13 @@ let dispatchBoxEvent: (message: WSEnvelope) => void = () => {}
 // surface the renderer expects, but over the box's HTTP routes + `/message` SSE.
 const boxClient = new BoxClient({
   resolveTarget: resolveBoxTarget,
-  getLocalToken: () => pairingService.getLocalToken(),
   emit: (message) => dispatchBoxEvent(message)
 })
 
 /**
- * Begin talking to the paired box: start polling it for new notifications
- * (replaces the old `/ws` push). No-ops when unpaired or unreachable.
+ * Begin talking directly to the box.
  */
-const startBoxClient = async (): Promise<void> => {
-  if (!pairingService.getLocalToken()) return
+const startBoxClient = (): void => {
   boxClient.start()
 }
 
@@ -97,28 +56,18 @@ const commandErrorText = async (res: Response): Promise<string> => {
 }
 
 /**
- * Send a command to the paired box, **local-first**: LAN when discoverable,
- * else the box's public tunnel URL, else the cloud relay as a last resort. The
- * chosen path is reported as `transport`.
+ * Send a command directly to the configured or discovered box.
  */
 const deviceCommand = async (
   type: string,
   payload?: Record<string, unknown>
 ): Promise<CommandResult> => {
-  const paired = pairingService.getState().device
-  if (!paired) return { ok: false, error: 'No paired device', transport: 'none' }
-
   const target = await resolveBoxTarget()
   if (target) {
-    const token = pairingService.getLocalToken()
     try {
       const res = await fetch(`${target.url}/command`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...BOX_HEADERS,
-          ...(token ? { Authorization: `Bearer ${token}` } : {})
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ type, payload })
       })
       if (!res.ok) {
@@ -139,21 +88,7 @@ const deviceCommand = async (
     }
   }
 
-  // Last resort: relay the command through the cloud.
-  const accessToken = authService.getAccessToken()
-  if (!accessToken) return { ok: false, error: 'Not signed in', transport: 'relay' }
-  try {
-    const res = await fetch(`${cloudBaseUrl()}/device/${paired.deviceId}/command`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}` },
-      body: JSON.stringify({ type, payload })
-    })
-    if (!res.ok) return { ok: false, error: await commandErrorText(res), transport: 'relay' }
-    const data = (await res.json()) as { ok: boolean; result?: Record<string, unknown> | null }
-    return { ok: data.ok, result: data.result ?? null, transport: 'relay' }
-  } catch {
-    return { ok: false, error: 'Could not reach the cloud relay', transport: 'relay' }
-  }
+  return { ok: false, error: 'Device is not reachable', transport: 'none' }
 }
 
 type UploadAttachmentFile = {
@@ -187,7 +122,6 @@ app.whenReady().then(async () => {
   let mainWindow: BrowserWindow | null = null
 
   await authService.load()
-  await pairingService.load()
   discovery.start()
 
   const showNativeNotification = (title: string, body: string): void => {
@@ -252,30 +186,9 @@ app.whenReady().then(async () => {
   ipcMain.handle('auth:google', () => authService.loginWithGoogle())
   ipcMain.handle('auth:logout', () => authService.logout())
 
-  ipcMain.handle('pair:get-state', () => pairingService.getState())
-  ipcMain.handle('pair:device', async (_event, { deviceId }: { deviceId: string }) => {
-    await authService.ensureFreshToken()
-    const result = await pairingService.pair(deviceId)
-    if (result.ok) {
-      // Now that we hold a local_token, start talking to the box (its routes
-      // are rejected while unpaired).
-      await startBoxClient()
-    }
-    return result
-  })
-
-  ipcMain.handle('pair:unpair', async () => {
-    await authService.ensureFreshToken()
-    const result = await pairingService.unpair()
-    // Stop polling / streaming from the box; the app returns to pairing.
-    boxClient.stop()
-    return result
-  })
-
   ipcMain.handle(
     'device:command',
     async (_event, { type, payload }: { type: string; payload?: Record<string, unknown> }) => {
-      await authService.ensureFreshToken()
       return deviceCommand(type, payload)
     }
   )
@@ -309,13 +222,8 @@ app.whenReady().then(async () => {
       if (!target) {
         throw new Error('Device is not reachable (not on this network and no tunnel).')
       }
-      const localToken = pairingService.getLocalToken()
       const response = await fetch(`${target.url}/attachments`, {
         method: 'POST',
-        headers: {
-          ...BOX_HEADERS,
-          ...(localToken ? { Authorization: `Bearer ${localToken}` } : {})
-        },
         body: formData
       })
 
@@ -372,8 +280,7 @@ app.whenReady().then(async () => {
   // Let LAN discovery settle so an at-home box is preferred over the tunnel.
   await discovery.waitForFirst(2_500)
 
-  // Only starts if already paired; otherwise it starts right after pairing.
-  await startBoxClient()
+  startBoxClient()
   mainWindow = createMainWindow()
 
   app.on('activate', function () {

@@ -11,13 +11,11 @@ import type {
 import type { Run, RunEventType } from '../../shared/run'
 import type { CodexInputQuestion, WSEnvelope } from '../../shared/ws'
 
-export type BoxTarget = { url: string; transport: 'lan' | 'remote' }
+export type BoxTarget = { url: string; transport: 'lan' }
 
 export type BoxClientDeps = {
-  /** How to reach the paired box right now (LAN or tunnel), or null if unreachable. */
+  /** How to reach the directly configured or discovered box. */
   resolveTarget: () => Promise<BoxTarget | null>
-  /** The pairing `local_token` used to authenticate box HTTP calls. */
-  getLocalToken: () => string | null
   /** Forward a box event to the renderer (and native notifications). */
   emit: (message: WSEnvelope) => void
 }
@@ -46,12 +44,13 @@ interface GatewayMessageOut {
 }
 
 interface GatewayEventRow {
-  id: number
-  session_id: string
-  hermes_session_id?: string | null
   type: string
-  payload: Record<string, unknown>
-  created_at: string
+  seq: number
+  time: number
+  data: Record<string, unknown>
+  ignorable?: boolean
+  sourceEventSeqs?: number[]
+  surfaceOp?: unknown
 }
 
 // server/gateway/routes.py `_MANIFEST_TO_GATEWAY_STATUS` values.
@@ -69,6 +68,7 @@ const isoToMs = (iso: string): number => {
 interface RunTracker {
   runId: string
   sequence: number
+  visibleTextLength: number
 }
 
 /** One live `GET /sessions/{id}/events` subscription plus its translation state. */
@@ -88,7 +88,7 @@ interface SessionSubscription {
  * The renderer still speaks the old socket surface — a {@link WSEnvelope} in
  * via {@link send}, {@link WSEnvelope}s back out via `emit` — so all the
  * gateway-specific plumbing (session bookkeeping, per-session event streams,
- * assistant.x / tool.x / error -> run.accepted/run.event translation) lives
+ * canonical Session events -> run.accepted/run.event translation) lives
  * here. See the class-level comments below for the two id spaces this
  * juggles.
  *
@@ -124,14 +124,12 @@ export class BoxClient {
   private async boxFetch(path: string, init?: RequestInit): Promise<Response | null> {
     const target = await this.deps.resolveTarget()
     if (!target) return null
-    const token = this.deps.getLocalToken()
     try {
       return await fetch(`${target.url}${path}`, {
         ...init,
         headers: {
           ...BOX_HEADERS,
-          ...(init?.headers ?? {}),
-          ...(token ? { Authorization: `Bearer ${token}` } : {})
+          ...(init?.headers ?? {})
         }
       })
     } catch {
@@ -186,7 +184,10 @@ export class BoxClient {
     const res = await this.boxFetch('/sessions', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ title: titleHint ?? null })
+      body: JSON.stringify({
+        title: titleHint ?? null,
+        cwd: process.env.AIOS_BOX_CWD?.trim() || null
+      })
     })
     if (!res || !res.ok) return null
     let session: GatewaySessionOut
@@ -563,8 +564,6 @@ export class BoxClient {
       closed: false
     }
     this.subscriptions.set(sessionId, sub)
-    await this.restoreCodexInputs(sub)
-
     const res = await this.boxFetch(
       `/sessions/${encodeURIComponent(sessionId)}/events?after=${cursor}`,
       { signal: controller.signal }
@@ -577,40 +576,6 @@ export class BoxClient {
     void this.consumeEventStream(sub, res.body)
   }
 
-  private async restoreCodexInputs(sub: SessionSubscription): Promise<void> {
-    const res = await this.boxFetch(`/sessions/${encodeURIComponent(sub.sessionId)}/codex-jobs`)
-    if (!res?.ok) return
-    try {
-      const jobs = (await res.json()) as Array<{
-        job_id?: unknown
-        status?: unknown
-        pending_input?: unknown
-      }>
-      for (const job of jobs) {
-        if (
-          job.status !== 'awaiting_input' ||
-          typeof job.job_id !== 'string' ||
-          !job.pending_input ||
-          typeof job.pending_input !== 'object'
-        ) {
-          continue
-        }
-        this.handleGatewayEvent(sub, {
-          id: 0,
-          session_id: sub.sessionId,
-          type: 'codex.input.requested',
-          payload: {
-            job_id: job.job_id,
-            ...(job.pending_input as Record<string, unknown>)
-          },
-          created_at: new Date().toISOString()
-        })
-      }
-    } catch {
-      // A malformed/non-JSON restore response should not prevent live SSE.
-    }
-  }
-
   /**
    * Skip replaying history the caller already has (from `/messages`) by
    * starting the live stream just past the newest event currently on record.
@@ -618,7 +583,7 @@ export class BoxClient {
    * and replay thousands of already-rendered events.
    */
   private async latestEventId(sessionId: string): Promise<number> {
-    let cursor = 0
+    let cursor = -1
     for (;;) {
       const res = await this.boxFetch(
         `/sessions/${encodeURIComponent(sessionId)}/events/history?after=${cursor}&limit=500`
@@ -626,7 +591,7 @@ export class BoxClient {
       if (!res || !res.ok) return cursor
       try {
         const rows = (await res.json()) as GatewayEventRow[]
-        const nextCursor = rows.reduce((max, row) => Math.max(max, row.id), cursor)
+        const nextCursor = rows.reduce((max, row) => Math.max(max, row.seq), cursor)
         if (rows.length < 500 || nextCursor === cursor) return nextCursor
         cursor = nextCursor
       } catch {
@@ -664,9 +629,9 @@ export class BoxClient {
   }
 
   private dispatchEventFrame(sub: SessionSubscription, frame: string): void {
-    // Each SSE frame is `id: <n>\nevent: <type>\ndata: <json>\n\n` (or a
+    // Each SSE frame is `id: <seq>\nevent: <type>\ndata: <json>\n\n` (or a
     // `: keepalive` comment line). The `data:` line's JSON already contains
-    // id/type/payload, so the `id:`/`event:` header lines are redundant for
+    // seq/type/data, so the `id:`/`event:` header lines are redundant for
     // our purposes and can be ignored.
     const dataLine = frame
       .split('\n')
@@ -684,42 +649,95 @@ export class BoxClient {
   }
 
   /**
-   * The crux of the gateway migration: translate the box's session-scoped
-   * `assistant.*`/`tool.*`/`error` events (server/gateway/translate.py) into
-   * the `run.accepted`/`run.event` shapes `runEventToChatEvent` expects. The
-   * gateway has no concept of a "run" on the wire (it's flattened into a flat
-   * per-session event log), so a runId is synthesized client-side per
-   * assistant turn and threaded through the events belonging to it.
+   * Translate LotusOS's canonical, lossless Session log into the legacy
+   * `run.accepted`/`run.event` surface the renderer consumes. A runId is
+   * synthesized client-side for each canonical turn.
    */
   private handleGatewayEvent(sub: SessionSubscription, row: GatewayEventRow): void {
     const chatId = sub.localId
-    const createdAt = isoToMs(row.created_at)
-    const payload = row.payload ?? {}
+    const createdAt = Number.isFinite(row.time) ? row.time : Date.now()
+    const payload = row.data ?? {}
 
     switch (row.type) {
-      case 'session.created':
-      case 'user.message':
+      case 'user/message':
         // Already reflected locally (optimistic user message / session
         // creation echo) — nothing new for the renderer here.
         return
 
-      case 'assistant.started':
+      case 'turn/start':
         this.startRun(sub, chatId, createdAt)
         return
 
-      case 'assistant.delta': {
-        const text = payload.text
+      case 'assistant/chunk': {
+        const chunk = payload.chunk
+        if (!chunk || typeof chunk !== 'object') return
+        const value = chunk as Record<string, unknown>
+        if (value.type !== 'text-delta') return
+        const text = value.text
         if (typeof text !== 'string') return
         this.ensureActiveRun(sub, chatId, createdAt)
         this.emitRunEvent(sub, chatId, createdAt, 'token', { value: text })
+        if (sub.activeRun) sub.activeRun.visibleTextLength += text.length
         return
       }
 
-      case 'assistant.completed': {
+      case 'assistant/message': {
         this.ensureActiveRun(sub, chatId, createdAt)
-        if (payload.raw_type === 'cancelled') {
+        if (sub.activeRun?.visibleTextLength === 0) {
+          const message = payload.message
+          const text = this.visibleText(
+            message && typeof message === 'object'
+              ? (message as Record<string, unknown>).content
+              : undefined
+          )
+          if (text) {
+            this.emitRunEvent(sub, chatId, createdAt, 'token', { value: text })
+            if (sub.activeRun) sub.activeRun.visibleTextLength += text.length
+          }
+        }
+        return
+      }
+
+      case 'tool/call':
+        this.ensureActiveRun(sub, chatId, createdAt)
+        this.emitRunEvent(sub, chatId, createdAt, 'tool_call_start', {
+          toolCallId: payload.callId,
+          toolName: payload.name,
+          input: this.parseToolArguments(payload.arguments)
+        })
+        return
+
+      case 'tool/result': {
+        this.ensureActiveRun(sub, chatId, createdAt)
+        const message =
+          payload.message && typeof payload.message === 'object'
+            ? (payload.message as Record<string, unknown>)
+            : {}
+        this.emitRunEvent(sub, chatId, createdAt, 'tool_call_end', {
+          toolCallId: message.toolCallId,
+          output: message.content,
+          isError: message.isError === true
+        })
+        return
+      }
+
+      case 'turn/end': {
+        this.ensureActiveRun(sub, chatId, createdAt)
+        const reason =
+          payload.reason && typeof payload.reason === 'object'
+            ? (payload.reason as Record<string, unknown>)
+            : {}
+        if (reason.kind === 'aborted' || reason.kind === 'interrupted') {
           this.emitRunEvent(sub, chatId, createdAt, 'cancelled', {
-            reason: typeof payload.reason === 'string' ? payload.reason : 'Run stopped by user.'
+            reason: 'Run stopped before completion.'
+          })
+        } else if (reason.kind === 'error' || reason.kind === 'blocked') {
+          const failure =
+            reason.error && typeof reason.error === 'object'
+              ? (reason.error as Record<string, unknown>)
+              : {}
+          this.emitRunEvent(sub, chatId, createdAt, 'error', {
+            error: typeof failure.message === 'string' ? failure.message : `Run ended: ${String(reason.kind)}`
           })
         } else {
           this.emitRunEvent(sub, chatId, createdAt, 'completed', null)
@@ -727,33 +745,6 @@ export class BoxClient {
         sub.activeRun = null
         return
       }
-
-      case 'tool.started':
-        this.ensureActiveRun(sub, chatId, createdAt)
-        this.emitRunEvent(sub, chatId, createdAt, 'tool_call_start', {
-          toolCallId: payload.tool_id,
-          toolName: payload.name,
-          input: payload.args
-        })
-        return
-
-      case 'tool.completed':
-        this.ensureActiveRun(sub, chatId, createdAt)
-        this.emitRunEvent(sub, chatId, createdAt, 'tool_call_end', {
-          toolCallId: payload.tool_id,
-          toolName: payload.name,
-          output: payload.result
-        })
-        return
-
-      case 'tool.progress':
-        this.ensureActiveRun(sub, chatId, createdAt)
-        this.emitRunEvent(sub, chatId, createdAt, 'progress', {
-          toolCallId: payload.tool_id,
-          toolName: payload.name,
-          context: payload.context
-        })
-        return
 
       case 'codex.started': {
         const jobId = typeof payload.job_id === 'string' ? payload.job_id : null
@@ -871,45 +862,44 @@ export class BoxClient {
         return
       }
 
-      case 'error':
-        this.ensureActiveRun(sub, chatId, createdAt)
-        this.emitRunEvent(sub, chatId, createdAt, 'error', {
-          error: typeof payload.message === 'string' ? payload.message : 'Run failed.'
-        })
-        sub.activeRun = null
+      case 'step/start':
+      case 'step/end':
+      case 'request/header':
+      case 'request/context':
+      case 'session/end-seed':
         return
-
-      case 'chat': {
-        // Not currently published anywhere in server/gateway/{routes,bus,
-        // translate}.py — grepped the box and only session.created/
-        // user.message are published outside ChatRunEventTranslator, which
-        // itself never emits "chat". Kept as a defensive, best-effort
-        // fallback: if a future/legacy path pushes a fully-formed message
-        // under this type, surface its text as a one-shot completed turn
-        // instead of silently dropping it.
-        const text =
-          typeof payload.text === 'string'
-            ? payload.text
-            : typeof payload.content === 'string'
-              ? payload.content
-              : null
-        if (text === null) return
-        this.ensureActiveRun(sub, chatId, createdAt)
-        this.emitRunEvent(sub, chatId, createdAt, 'token', { value: text })
-        this.emitRunEvent(sub, chatId, createdAt, 'completed', null)
-        sub.activeRun = null
-        return
-      }
 
       default:
-        console.warn(`[box] unhandled gateway event type: ${row.type}`)
+        if (row.ignorable !== true) console.warn(`[box] unhandled LotusOS event type: ${row.type}`)
     }
+  }
+
+  private parseToolArguments(value: unknown): unknown {
+    if (typeof value !== 'string') return value
+    try {
+      return JSON.parse(value) as unknown
+    } catch {
+      return value
+    }
+  }
+
+  private visibleText(content: unknown): string {
+    if (!Array.isArray(content)) return ''
+    return content
+      .map((candidate) => {
+        if (!candidate || typeof candidate !== 'object') return ''
+        const block = candidate as Record<string, unknown>
+        if (block.type === 'text' && typeof block.text === 'string') return block.text
+        if (block.type === 'tool-result') return this.visibleText(block.content)
+        return ''
+      })
+      .join('')
   }
 
   private startRun(sub: SessionSubscription, chatId: string, createdAt: number): void {
     const turnId = sub.pendingTurnIds.shift() ?? null
     const runId = randomUUID()
-    sub.activeRun = { runId, sequence: 0 }
+    sub.activeRun = { runId, sequence: 0, visibleTextLength: 0 }
     const run: Run = {
       id: runId,
       kind: 'chat',
@@ -953,15 +943,13 @@ export class BoxClient {
 
   /**
    * Historically started the notification poller. The gateway has no
-   * notifications backend, so there's nothing to poll — kept as a no-op so
-   * main/index.ts's pairing lifecycle (`startBoxClient()` on ready/pair)
-   * doesn't need to change.
+   * notifications backend, so there is nothing to poll.
    */
   start(): void {
     // Intentionally empty — see the class comment above.
   }
 
-  /** Abort all live event subscriptions and reset session bookkeeping (e.g. on unpair/quit). */
+  /** Abort all live event subscriptions and reset session bookkeeping on quit. */
   stop(): void {
     for (const sub of this.subscriptions.values()) {
       sub.closed = true

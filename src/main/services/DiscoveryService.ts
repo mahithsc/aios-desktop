@@ -22,8 +22,7 @@ const pickIpv4 = (addresses: string[] | undefined): string | null => {
  * Discovers aios boxes on the local network via mDNS (`_aios._tcp`).
  *
  * The box advertises its stable `device_id` in the TXT record (see the box's
- * `server/discovery.py`), so we key devices by id and can tell exactly which
- * physical box each result is — the input the pairing flow needs.
+ * `server/discovery.py`), so we key direct LAN targets by physical device.
  */
 export class DiscoveryService {
   private readonly bonjour = new Bonjour()

@@ -3,7 +3,6 @@ import type { MessageAttachment } from '../shared/chat'
 import type { WSEnvelope } from '../shared/ws'
 import type { DiscoveredDevice } from '../shared/discovery'
 import type { AuthResult, AuthState } from '../shared/auth'
-import type { PairResult, PairState } from '../shared/pairing'
 import type { CommandResult } from '../shared/device'
 
 interface UploadAttachmentFile {
@@ -22,11 +21,6 @@ interface AppAPI {
     signup: (email: string, password: string) => Promise<AuthResult>
     google: () => Promise<AuthResult>
     logout: () => Promise<void>
-  }
-  pairing: {
-    getState: () => Promise<PairState>
-    pair: (deviceId: string) => Promise<PairResult>
-    unpair: () => Promise<{ ok: boolean }>
   }
   device: {
     command: (type: string, payload?: Record<string, unknown>) => Promise<CommandResult>

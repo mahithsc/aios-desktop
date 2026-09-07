@@ -3,7 +3,6 @@ import { useMemo, useState } from 'react'
 import Agents from '../../pages/agents/Agents'
 import Home from '../../pages/home/Home'
 import Plugins from '../../pages/plugins/Plugins'
-import { usePairingStore } from '../../store/usePairingStore'
 
 type TabId = 'home' | 'agents' | 'plugins'
 
@@ -23,18 +22,6 @@ const noDragRegionStyle = { WebkitAppRegion: 'no-drag' } as CSSProperties
 
 const MainWindow = ({ isOverlayOpen, onOpenOverlay }: MainWindowProps): JSX.Element => {
   const [activeTab, setActiveTab] = useState<TabId>('home')
-  const [unpairing, setUnpairing] = useState(false)
-  const device = usePairingStore((state) => state.device)
-  const unpair = usePairingStore((state) => state.unpair)
-
-  const handleUnpair = async (): Promise<void> => {
-    if (!window.confirm('Unpair this device? You’ll need to pair it again to use it.')) {
-      return
-    }
-    setUnpairing(true)
-    await unpair() // on success the app returns to the pairing screen (this unmounts)
-    setUnpairing(false)
-  }
 
   const content = useMemo(() => {
     if (activeTab === 'agents') {
@@ -102,18 +89,8 @@ const MainWindow = ({ isOverlayOpen, onOpenOverlay }: MainWindowProps): JSX.Elem
               {isOverlayOpen ? 'Desktop Widget Open' : 'Open Desktop Widget'}
             </button>
             <div className="rounded-full border border-border bg-card px-4 py-2 text-sm text-muted-foreground">
-              GPT 5.4
+              GPT-5 · High reasoning
             </div>
-            <button
-              type="button"
-              onClick={handleUnpair}
-              disabled={unpairing || !device}
-              data-testid="unpair-button"
-              title={device ? `Unpair ${device.slug}` : 'No device paired'}
-              className="rounded-full border border-border bg-card px-4 py-2 text-sm text-muted-foreground transition hover:border-destructive hover:text-destructive disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              {unpairing ? 'Unpairing…' : 'Unpair'}
-            </button>
           </div>
         </header>
 
