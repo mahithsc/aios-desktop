@@ -3,8 +3,9 @@ import { useMemo, useState } from 'react'
 import Agents from '../../pages/agents/Agents'
 import Home from '../../pages/home/Home'
 import Plugins from '../../pages/plugins/Plugins'
+import Apps from '../../pages/apps/Apps'
 
-type TabId = 'home' | 'agents' | 'plugins'
+type TabId = 'home' | 'agents' | 'apps' | 'plugins'
 
 type MainWindowProps = {
   isOverlayOpen: boolean
@@ -14,6 +15,7 @@ type MainWindowProps = {
 const tabs: Array<{ id: TabId; label: string }> = [
   { id: 'home', label: 'Home' },
   { id: 'agents', label: 'Agents' },
+  { id: 'apps', label: 'Apps' },
   { id: 'plugins', label: 'Plugins' }
 ]
 
@@ -38,6 +40,10 @@ const MainWindow = ({ isOverlayOpen, onOpenOverlay }: MainWindowProps): JSX.Elem
 
     if (activeTab === 'plugins') {
       return <Plugins />
+    }
+
+    if (activeTab === 'apps') {
+      return <Apps />
     }
 
     return <Home onOpenAgents={() => setActiveTab('agents')} />

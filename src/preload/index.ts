@@ -5,6 +5,14 @@ import type { WSEnvelope } from '../shared/ws'
 import type { DiscoveredDevice } from '../shared/discovery'
 import type { AuthResult, AuthState } from '../shared/auth'
 import type { CommandResult } from '../shared/device'
+import type {
+  AppAccessOverview,
+  AppInvitation,
+  AppMember,
+  AppMemberUpdate,
+  AppRole,
+  DeployedApp
+} from '../shared/appAccess'
 
 type UploadAttachmentFile = {
   name: string
@@ -30,6 +38,23 @@ const api = {
       ipcRenderer.invoke('auth:signup', { email, password }),
     google: (): Promise<AuthResult> => ipcRenderer.invoke('auth:google'),
     logout: (): Promise<void> => ipcRenderer.invoke('auth:logout')
+  },
+  appAccess: {
+    listApps: (): Promise<DeployedApp[]> => ipcRenderer.invoke('app-access:list'),
+    getOverview: (appId: string): Promise<AppAccessOverview> =>
+      ipcRenderer.invoke('app-access:overview', appId),
+    createInvitation: (
+      appId: string,
+      email: string,
+      role: Exclude<AppRole, 'owner'>
+    ): Promise<AppInvitation> =>
+      ipcRenderer.invoke('app-access:create-invitation', { appId, email, role }),
+    cancelInvitation: (appId: string, invitationId: string): Promise<AppInvitation> =>
+      ipcRenderer.invoke('app-access:cancel-invitation', { appId, invitationId }),
+    updateMember: (appId: string, appUserId: string, update: AppMemberUpdate): Promise<AppMember> =>
+      ipcRenderer.invoke('app-access:update-member', { appId, appUserId, update }),
+    removeMember: (appId: string, appUserId: string): Promise<void> =>
+      ipcRenderer.invoke('app-access:remove-member', { appId, appUserId })
   },
   device: {
     command: (type: string, payload?: Record<string, unknown>): Promise<CommandResult> =>

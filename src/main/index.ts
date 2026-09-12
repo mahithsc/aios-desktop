@@ -3,14 +3,17 @@ import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import { BoxClient } from './services/BoxClient'
 import { DiscoveryService } from './services/DiscoveryService'
 import { AuthService } from './services/AuthService'
+import { AppAccessService } from './services/AppAccessService'
 import { createMainWindow } from './windows/createMainWindow'
 import { SERVER_URL } from '../shared/config'
 import type { MessageAttachment } from '../shared/chat'
 import type { WSEnvelope } from '../shared/ws'
 import type { CommandResult } from '../shared/device'
+import type { AppMemberUpdate, AppRole } from '../shared/appAccess'
 
 const discovery = new DiscoveryService()
 const authService = new AuthService()
+const appAccessService = new AppAccessService(authService)
 type BoxTarget = { url: string; transport: 'lan' }
 
 /**
@@ -185,6 +188,31 @@ app.whenReady().then(async () => {
   )
   ipcMain.handle('auth:google', () => authService.loginWithGoogle())
   ipcMain.handle('auth:logout', () => authService.logout())
+
+  ipcMain.handle('app-access:list', () => appAccessService.listApps())
+  ipcMain.handle('app-access:overview', (_event, appId: string) =>
+    appAccessService.getOverview(appId)
+  )
+  ipcMain.handle(
+    'app-access:create-invitation',
+    (_event, payload: { appId: string; email: string; role: Exclude<AppRole, 'owner'> }) =>
+      appAccessService.createInvitation(payload.appId, payload.email, payload.role)
+  )
+  ipcMain.handle(
+    'app-access:cancel-invitation',
+    (_event, payload: { appId: string; invitationId: string }) =>
+      appAccessService.cancelInvitation(payload.appId, payload.invitationId)
+  )
+  ipcMain.handle(
+    'app-access:update-member',
+    (_event, payload: { appId: string; appUserId: string; update: AppMemberUpdate }) =>
+      appAccessService.updateMember(payload.appId, payload.appUserId, payload.update)
+  )
+  ipcMain.handle(
+    'app-access:remove-member',
+    (_event, payload: { appId: string; appUserId: string }) =>
+      appAccessService.removeMember(payload.appId, payload.appUserId)
+  )
 
   ipcMain.handle(
     'device:command',
